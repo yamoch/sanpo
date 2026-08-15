@@ -436,6 +436,20 @@
     </style>
   </head>
   <body>
+    <!-- ハッチング用のSVGパターン定義 -->
+    <svg width="0" height="0" style="position: absolute; z-index: -1">
+      <defs>
+        <pattern
+          id="redHatch"
+          patternUnits="userSpaceOnUse"
+          width="20"
+          height="20"
+        >
+          <path d="M 0,20 L 20,0" style="stroke: red; stroke-width: 0.5" />
+        </pattern>
+      </defs>
+    </svg>
+
     <!-- ヘッダー -->
     <header class="app-header">
       <button id="menu-btn" class="menu-btn">☰</button>
@@ -840,6 +854,8 @@
 
     <!-- gis/scenic_zone.js の読み込み -->
     <script src="gis/scenic_zone.js"></script>
+    <!-- gis/ancientcapital_zone.js の読み込み -->
+    <script src="gis/ancientcapital_zone.js"></script>
 
     <script>
       let map;
@@ -1344,6 +1360,34 @@
             '© <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a>',
         },
       ).addTo(map);
+      // ▼▼ 歴史的風土保存区域・特別保存地区のレイヤーを定義 ▼▼
+      const ancientCapitalZoneLayer = L.geoJSON(
+        typeof json__1 !== "undefined" ? json__1 : null,
+        {
+          style: function (feature) {
+            const distType = feature.properties && feature.properties.DistType; //[cite: 1]
+
+            if (distType === "歴史的風土保存区域") {
+              // 境界線を赤枠とし、塗りつぶしはなし[cite: 1]
+              return {
+                color: "red",
+                weight: 2,
+                fill: false,
+              };
+            } else if (distType === "歴史的風土特別保存地区") {
+              // 境界線を赤枠とし、塗りつぶし部分に赤色のハッチング[cite: 1]
+              return {
+                color: "red",
+                weight: 2,
+                fillColor: "url(#redHatch)", // 先ほど定義したSVGパターンを指定
+                fillOpacity: 0.8,
+              };
+            }
+            // それ以外は変更しない[cite: 1]
+            return {};
+          },
+        },
+      );
 
       // ▼▼ 風致地区のレイヤーを変数として定義 ▼▼
       const scenicZoneLayer = L.geoJSON(
@@ -1377,9 +1421,21 @@
         },
       );
 
+      // 2つのGeoJSONレイヤーを「同じレイヤー」としてグループ化する[cite: 1]
+      const zoneLayerGroup = L.layerGroup([
+        scenicZoneLayer,
+        ancientCapitalZoneLayer,
+      ]);
+
+      // マップに表示された際に、古都保存法のレイヤーを強制的に前面（上）へ描画する
+      zoneLayerGroup.on("add", function () {
+        ancientCapitalZoneLayer.bringToFront();
+      });
+
       // 年代別写真をベースレイヤー（ラジオボタン）として定義
       const baseLayers = {
-        "風致地区（1桃 2青 3黄 4緑 5橙）": scenicZoneLayer, // ← ここを変数に置き換え
+        "古都保存法･風致地区（1桃 2青 3黄 4緑 5橙 歴風赤枠 歴風特別赤枠ハッチ）":
+          zoneLayerGroup, // ← ここを変数に置き換え
         "昭和59年～昭和61年（1984年～1986年）": L.tileLayer(
           "https://cyberjapandata.gsi.go.jp/xyz/gazo3/{z}/{x}/{y}.jpg",
           {
@@ -1459,6 +1515,10 @@
                 map.removeLayer(layer);
               }
             });
+            // 変更：グループレイヤーを削除する判定に変更
+            if (map.hasLayer(zoneLayerGroup)) {
+              map.removeLayer(zoneLayerGroup);
+            }
             e.preventDefault();
           } else {
             lastSelectedRadio = e.target;
@@ -1496,9 +1556,18 @@
           }
         });
 
-        // ▼▼ 追加：GeoJSON（風致地区）が表示されている場合は不透明度を変更 ▼▼
+        // ▼▼ 追加：GeoJSON（風致・歴史的風土地区）が表示されている場合は不透明度を変更 ▼▼
         if (map.hasLayer(scenicZoneLayer)) {
           scenicZoneLayer.setStyle({ fillOpacity: opacity });
+        }
+        if (map.hasLayer(ancientCapitalZoneLayer)) {
+          ancientCapitalZoneLayer.eachLayer((layer) => {
+            const distType =
+              layer.feature.properties && layer.feature.properties.DistType;
+            if (distType === "歴史的風土特別保存地区") {
+              layer.setStyle({ fillOpacity: opacity });
+            }
+          });
         }
       });
 
