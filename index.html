@@ -1,0 +1,3052 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <!-- スマホでの全画面表示（URLバー非表示）用メタタグ -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- ▼▼ PWA化のための追記 ▼▼ -->
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="apple-touch-icon" href="photo/icon-192x192.png" />
+    <!-- ▲▲ PWA化のための追記 ▲▲ -->
+    <title>さんぽマップ</title>
+    <!-- LeafletのCSS -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        /* スマホのURLバーを考慮した全画面高さ(dvh)を使用 */
+        height: 100dvh;
+      }
+
+      /* --- ヘッダーとハンバーガーメニューのスタイル --- */
+      .app-header {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 50px;
+        background: #fff;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        padding: 0 10px;
+        box-sizing: border-box;
+      }
+      .menu-btn {
+        font-size: 24px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 5px 10px;
+      }
+      .app-title {
+        font-size: 16px;
+        margin: 0 0 0 10px;
+        font-family: sans-serif;
+      }
+      /* 全画面表示ボタンのスタイル */
+      .fullscreen-btn {
+        margin-left: auto;
+        background: none;
+        border: none;
+        font-size: 22px;
+        cursor: pointer;
+        color: #555;
+        padding: 5px 10px;
+      }
+      .sidebar {
+        position: absolute;
+        top: 50px;
+        left: -250px;
+        width: 250px;
+        height: calc(100dvh - 50px);
+        background: #f8f9fa;
+        z-index: 2000;
+        transition: left 0.3s ease;
+        box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
+        display: flex;
+        flex-direction: column;
+      }
+      .sidebar.open {
+        left: 0;
+      }
+      .sidebar-header {
+        padding: 15px;
+        font-weight: bold;
+        border-bottom: 1px solid #ddd;
+        font-family: sans-serif;
+        color: #555;
+      }
+      .nav-btn {
+        padding: 12px 15px;
+        text-align: left;
+        background: none;
+        border: none;
+        border-bottom: 1px solid #ddd;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .nav-btn.active {
+        background: #e2e6ea;
+        font-weight: bold;
+      }
+      .nav-desc {
+        font-size: 11px;
+        color: #666;
+        font-weight: normal;
+        margin-top: 3px;
+      }
+
+      /* --- パネルのスタイル --- */
+      .panel {
+        display: none;
+        position: absolute;
+        top: 60px;
+        left: 10px;
+        z-index: 1000;
+        background: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        font-family: sans-serif;
+        font-size: 14px;
+        width: calc(100vw - 40px);
+        max-width: 400px;
+        max-height: calc(100dvh - 80px);
+        overflow-y: auto;
+        box-sizing: border-box;
+      }
+      .panel.active {
+        display: block;
+      }
+      .panel h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      /* マップの調整 */
+      #map {
+        height: calc(100dvh - 50px);
+        width: 100vw;
+        margin-top: 50px;
+      }
+
+      /* --- コントロール群のスタイル --- */
+      .control-panel {
+        margin-top: 10px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .control-panel button {
+        padding: 6px 10px;
+        font-size: 12px;
+        cursor: pointer;
+        border: 1px solid #ccc;
+        background: #f8f8f8;
+        border-radius: 4px;
+      }
+      .control-panel button.active {
+        background: #007bff;
+        color: white;
+        border-color: #0056b3;
+      }
+      .control-panel button:disabled {
+        background: #e0e0e0;
+        color: #888;
+        cursor: not-allowed;
+      }
+      #btn-stop-speech {
+        transition:
+          filter 0.2s,
+          background-color 0.2s;
+      }
+      #btn-stop-speech:hover {
+        filter: brightness(0.9);
+      }
+      /* 詳細設定（アコーディオン） */
+      .advanced-settings {
+        margin-top: 12px;
+        border-top: 1px dashed #ccc;
+        padding-top: 8px;
+      }
+      .advanced-settings summary {
+        cursor: pointer;
+        font-weight: bold;
+        color: #444;
+        font-size: 12px;
+        margin-bottom: 8px;
+        outline: none;
+      }
+
+      .leaflet-control-zoom a {
+        width: 44px !important;
+        height: 44px !important;
+        line-height: 44px !important;
+        font-size: 22px !important;
+        font-weight: bold;
+      }
+      .leaflet-control-recenter {
+        width: 44px;
+        height: 44px;
+        background: #ffffff;
+        border: 2px solid rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        user-select: none;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+      }
+      .leaflet-control-recenter:hover {
+        background: #f4f4f4;
+      }
+      .speed-panel {
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        flex-wrap: wrap;
+      }
+      .speed-panel button {
+        padding: 4px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        border: 1px solid #ccc;
+        background: #f8f8f8;
+        border-radius: 4px;
+      }
+      .speed-panel button.active {
+        background: #28a745;
+        color: white;
+        border-color: #1e7e34;
+        font-weight: bold;
+      }
+      .participant-panel {
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        flex-wrap: wrap;
+      }
+      .participant-panel button {
+        padding: 4px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        border: 1px solid #ccc;
+        background: #f8f8f8;
+        border-radius: 4px;
+      }
+      .participant-panel button.active {
+        background: #17a2b8;
+        color: white;
+        border-color: #117a8b;
+        font-weight: bold;
+      }
+      .route-storage-panel {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid #eee;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+        font-size: 12px;
+      }
+      .btn-dark-gray {
+        background: #555 !important;
+        color: white !important;
+        border-color: #444 !important;
+      }
+      .btn-dark-gray:hover {
+        background: #444 !important;
+      }
+      .btn-subtle {
+        background: #f0f0f0 !important;
+        color: #777 !important;
+        border: 1px solid #ddd !important;
+        font-size: 10px !important;
+        padding: 2px 6px !important;
+      }
+      /* --- ファイルにほぞん：さんぽみち選択メニュー --- */
+      .export-menu {
+        position: absolute;
+        z-index: 3000;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+        padding: 10px;
+        font-family: sans-serif;
+        font-size: 12px;
+        max-height: 320px;
+        overflow-y: auto;
+        min-width: 220px;
+      }
+      .export-menu-title {
+        font-size: 12px;
+        color: #333;
+        font-weight: bold;
+        margin-bottom: 6px;
+      }
+      .delete-point-btn {
+        background: #ff4d4d;
+        color: white;
+        border: none;
+        padding: 4px 8px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 11px;
+      }
+      .spot-popup-img {
+        width: 100%;
+        max-width: 200px;
+        height: auto;
+        border-radius: 4px;
+        margin-top: 6px;
+        margin-bottom: 4px;
+        display: block;
+      }
+      .custom-route-pin {
+        width: 7px;
+        height: 7px;
+        background-color: #ff3333;
+        border: 2px solid #ffffff;
+        border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+        cursor: grab;
+      }
+      .custom-route-pin:active {
+        cursor: grabbing;
+      }
+      .custom-midpoint-pin {
+        width: 5px;
+        height: 5px;
+        background-color: #ffa500;
+        border: 2px dashed #ffffff;
+        border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        cursor: pointer;
+        opacity: 0.7;
+      }
+      .custom-midpoint-pin:hover {
+        opacity: 1;
+        transform: scale(1.2);
+      }
+      /* 高低差プロファイルをコンパクト化（地図を隠さないため） */
+      .elevation-panel {
+        margin-top: 6px;
+        padding-top: 4px;
+        border-top: 1px solid #eee;
+        display: none;
+      }
+      .chart-container {
+        position: relative;
+        height: 90px;
+        width: 100%;
+      }
+      .btn-elevation-toggle {
+        margin-top: 6px;
+        padding: 4px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        border: 1px solid #007bff;
+        background: #eef6ff;
+        color: #007bff;
+        border-radius: 4px;
+        font-weight: bold;
+      }
+      /* おさんぽモードの距離表示が空のときは隠す */
+      #osanpo-distance:empty {
+        display: none !important;
+      }
+
+      /* 画面ロック用のオーバーレイ */
+      #screen-lock-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100dvh;
+        background: rgba(211, 211, 211, 0.8);
+        z-index: 10000;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+      }
+      #btn-unlock-screen {
+        padding: 15px 30px;
+        font-size: 18px;
+        border-radius: 8px;
+        border: none;
+        background: #fff;
+        color: #333;
+        font-weight: bold;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        cursor: pointer;
+      }
+      /* --- 不透明度スライダーのスタイル --- */
+      .leaflet-control-opacity {
+        background: rgba(255, 255, 255, 0.95);
+        padding: 8px 10px;
+        border-radius: 4px;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+        font-family: sans-serif;
+        font-size: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        user-select: none;
+      }
+      .leaflet-control-opacity input[type="range"] {
+        accent-color: #888;
+        cursor: pointer;
+      }
+
+      /* レイヤー選択時のスタイル調整 */
+      .leaflet-control-layers-expanded .leaflet-control-layers-toggle {
+        display: block !important;
+        width: 100% !important;
+        border-bottom: 1px solid #ddd;
+        background-position: center;
+        background-repeat: no-repeat;
+      }
+      .leaflet-control-layers-expanded {
+        padding-top: 0 !important;
+      }
+      .leaflet-control-layers-expanded .leaflet-control-layers-list {
+        margin-top: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ヘッダー -->
+    <header class="app-header">
+      <button id="menu-btn" class="menu-btn">☰</button>
+      <h1 class="app-title">さんぽマップ</h1>
+      <!-- 全画面表示ボタンを追加 -->
+      <button id="fullscreen-btn" class="fullscreen-btn" title="全画面表示">
+        ⛶
+      </button>
+    </header>
+
+    <!-- サイドバーメニュー -->
+    <nav id="sidebar" class="sidebar">
+      <button id="nav-osanpo" class="nav-btn active">
+        <div>さんぽモード</div>
+        <div class="nav-desc">いまあるいているみちをきろくする。</div>
+      </button>
+      <button id="nav-omoide" class="nav-btn">
+        <div>おもいでモード</div>
+        <div class="nav-desc">きろくしたさんぽみちをさいせいする。</div>
+      </button>
+      <button id="nav-import-csv" class="nav-btn">
+        <div>（おとなよう）CSV読込</div>
+        <div class="nav-desc">スポットデータをCSVから読み込む</div>
+      </button>
+    </nav>
+
+    <!-- 画面ロック用オーバーレイ -->
+    <div id="screen-lock-overlay">
+      <div
+        style="
+          color: black;
+          margin-bottom: 20px;
+          font-size: 18px;
+          font-weight: bold;
+        "
+      >
+        がめんロックちゅう
+      </div>
+      <button id="btn-unlock-screen">ロックをかいじょ（3かいタップ）</button>
+    </div>
+
+    <!-- ================= さんぽモードパネル ================= -->
+    <div id="panel-osanpo" class="panel active">
+      <div
+        style="
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-bottom: 2px solid #9e9e9e;
+          margin-bottom: 8px;
+          padding-bottom: 4px;
+        "
+      >
+        <h3>さんぽモード</h3>
+        <div style="display: flex; align-items: center; gap: 6px">
+          <button
+            id="btn-lock-screen"
+            style="
+              background: #f0f0f0;
+              border: 1px solid #ccc;
+              color: black;
+              border-radius: 4px;
+              padding: 2px 8px;
+              font-size: 11px;
+              cursor: pointer;
+            "
+            title="画面ロック"
+          >
+            画面ロック
+          </button>
+          <button
+            id="btn-toggle-osanpo-body"
+            style="
+              background: #f0f0f0;
+              border: 1px solid #ccc;
+              color: black;
+              border-radius: 4px;
+              padding: 2px 8px;
+              font-size: 11px;
+              cursor: pointer;
+            "
+          >
+            非表示 ▲
+          </button>
+        </div>
+      </div>
+
+      <div id="osanpo-panel-body">
+        <!-- 画面いっぱいに広げる余白調整 -->
+        <div
+          class="control-panel"
+          style="display: flex; gap: 10px; width: 100%; margin-top: 10px"
+        >
+          <button
+            id="btn-start-tracking"
+            style="
+              flex: 1;
+              background: #1b7430;
+              color: white;
+              border: none;
+              padding: 12px;
+              font-size: 16px;
+              border-radius: 6px;
+            "
+          >
+            ▶ はじめる
+          </button>
+          <button
+            id="btn-stop-tracking"
+            style="
+              flex: 1;
+              background: #bd2837;
+              color: white;
+              border: none;
+              padding: 12px;
+              font-size: 16px;
+              border-radius: 6px;
+            "
+            disabled
+          >
+            ■ おわる
+          </button>
+        </div>
+      </div>
+
+      <div
+        id="osanpo-distance"
+        style="
+          position: fixed;
+          bottom: 20px;
+          left: 10px;
+          width: calc(100vw - 80px);
+          max-width: 320px;
+          background: rgba(255, 255, 255, 0.95);
+          padding: 10px 15px;
+          border-radius: 8px;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+          z-index: 1500;
+          box-sizing: border-box;
+          font-weight: bold;
+          color: #333;
+        "
+      ></div>
+    </div>
+
+    <!-- ================= おもいでモードパネル ================= -->
+    <div id="panel-omoide" class="panel">
+      <h3
+        style="
+          border-bottom: 2px solid #9e9e9e;
+          display: inline-block;
+          margin-bottom: 8px;
+        "
+      >
+        おもいでモード
+      </h3>
+
+      <div
+        id="status"
+        style="
+          margin-bottom: 8px;
+          color: #007bff;
+          font-weight: bold;
+          font-size: 12px;
+        "
+      ></div>
+
+      <!-- さんぽみちをえらぶプルダウン（詳細設定から独立） -->
+      <div id="route-select-container" style="margin-bottom: 8px">
+        <select
+          id="route-select"
+          style="width: 100%; padding: 4px; font-size: 12px"
+        >
+          <option value="">さんぽみちをえらぶ</option>
+        </select>
+      </div>
+
+      <!-- 普段使うきのう -->
+      <div class="control-panel">
+        <button id="btn-draw-mode">さんぽみちをつくる</button>
+        <button id="btn-start-tour" disabled>▶ さんぽスタート</button>
+        <button id="btn-pause-tour" disabled style="display: none">
+          ⏸ 一時停止
+        </button>
+        <button id="btn-stop-tour" disabled style="display: none">
+          ■ ちゅうし
+        </button>
+        <button
+          id="btn-stop-speech"
+          style="background: #d4edda"
+          title="音声を停止するにはクリック"
+        >
+          🔊
+        </button>
+      </div>
+
+      <!-- 編集モードのときのみ表示する保存・編集操作パネル -->
+      <div
+        id="edit-storage-panel"
+        style="
+          margin-top: 8px;
+          display: none;
+          flex-direction: column;
+          gap: 4px;
+          font-size: 12px;
+        "
+      >
+        <div style="display: flex; gap: 6px; width: 100%">
+          <button id="btn-save-route" disabled style="flex: 1">
+            あたらしくほぞん
+          </button>
+          <button id="btn-overwrite-route" disabled style="flex: 1">
+            うわがきほぞん
+          </button>
+        </div>
+        <div style="display: flex; gap: 6px; width: 100%">
+          <button id="btn-rename-route" style="flex: 1">なまえをかえる</button>
+          <button id="btn-delete-saved-route" style="color: #d9534f; flex: 1">
+            削除
+          </button>
+        </div>
+      </div>
+
+      <!-- 画面下部に固定する表示群 -->
+      <div
+        id="omoide-bottom-wrapper"
+        style="
+          position: fixed;
+          bottom: 20px;
+          left: 10px;
+          width: calc(100vw - 80px);
+          max-width: 320px;
+          z-index: 1500;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          pointer-events: none;
+        "
+      >
+        <div
+          id="distance-info"
+          style="
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            color: #444;
+            font-size: 11px;
+            display: none;
+          "
+        >
+          <div id="tour-progress-text"></div>
+          <div
+            id="tour-altitude-text"
+            style="
+              margin-top: 2px;
+              display: none;
+              font-weight: bold;
+              color: #333;
+            "
+          ></div>
+          <button
+            id="btn-toggle-elevation"
+            class="btn-elevation-toggle"
+            style="display: none; width: 100%; margin-top: 8px"
+          >
+            こうていさをみる
+          </button>
+        </div>
+
+        <div
+          id="elevation-panel"
+          class="elevation-panel"
+          style="
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            margin-top: 0;
+            border-top: none;
+            display: none;
+          "
+        >
+          <div class="chart-container">
+            <canvas id="elevationChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- 詳細設定 -->
+      <details class="advanced-settings" id="details-advanced">
+        <summary>くわしいせってい</summary>
+
+        <div class="control-panel" style="margin-top: 0; margin-bottom: 8px">
+          <button id="btn-reset-route">さんぽみちリセット</button>
+        </div>
+
+        <div class="speed-panel">
+          <span>はやさ:</span>
+          <button id="btn-speed-normal" class="active">ふつう</button>
+          <button id="btn-speed-express">きゅうこう</button>
+          <button id="btn-speed-limited">とっきゅう</button>
+          <button id="btn-speed-shinkansen">しんかんせん</button>
+        </div>
+
+        <div class="participant-panel">
+          <span>さんかしゃ:</span>
+          <button id="btn-user-taichi" class="participant-btn active">
+            たいち
+          </button>
+          <button id="btn-user-okaasan" class="participant-btn">
+            おかあさん
+          </button>
+          <button id="btn-user-otousan" class="participant-btn active">
+            おとうさん
+          </button>
+        </div>
+
+        <div class="route-storage-panel">
+          <div
+            style="
+              display: flex;
+              gap: 6px;
+              width: 100%;
+              margin-top: 4px;
+              align-items: center;
+            "
+          >
+            <button
+              id="btn-export-routes"
+              class="btn-dark-gray"
+              style="
+                flex: 1;
+                white-space: nowrap;
+                padding: 6px 2px;
+                font-size: 11px;
+              "
+            >
+              ファイルに保存
+            </button>
+            <button
+              id="btn-import-routes"
+              class="btn-dark-gray"
+              style="
+                flex: 1;
+                white-space: nowrap;
+                padding: 6px 2px;
+                font-size: 11px;
+              "
+            >
+              ファイルを読み込む
+            </button>
+            <button
+              id="btn-import-help"
+              style="
+                background: #9a9b9b;
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 22px;
+                height: 22px;
+                font-size: 12px;
+                font-weight: bold;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+              "
+              title="読込可能なファイル形式"
+            >
+              ？
+            </button>
+          </div>
+          <input
+            type="file"
+            id="route-file-input"
+            accept=".json,.gpx"
+            style="display: none"
+          />
+          <input
+            type="file"
+            id="csv-file-input"
+            accept=".csv"
+            style="display: none"
+          />
+        </div>
+      </details>
+    </div>
+
+    <!-- マップ領域 -->
+    <div id="map"></div>
+
+    <!-- Papa Parse -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- LeafletのJavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- gis/scenic_zone.js の読み込み -->
+    <script src="gis/scenic_zone.js"></script>
+
+    <script>
+      let map;
+      let spotMarkers = [];
+      let spots = [];
+      let userMarker = null;
+      let lastUserLatLng = null;
+      let lastAngleDeg = 0;
+      let isMovingEast = false;
+
+      // さんぽモード（トラッキング用）変数
+      let isTracking = false;
+      let trackedRoute = [];
+      let trackedPolyline = null;
+      let trackingCircleMarker = null;
+      let wakeLock = null;
+      let audioCtx = null;
+      let keepAliveInterval = null;
+      let isSpeechEnabled = true;
+      let isOsanpoDistanceContentVisible = true; // 下部ログ表示領域の折りたたみ状態
+
+      // ルート・ツアー用変数（おもいでモード用）
+      let isDrawMode = false;
+      let routePoints = [];
+      let routePolyline = null;
+      let routeMarkers = [];
+      let midpointMarkers = [];
+      let isTourRunning = false;
+      let isTourPaused = false;
+      let tourInterval = null;
+      let tourPath = [];
+      let tourCurrentIndex = 0;
+      let nextPointId = 0;
+
+      let tourSpeedInterval = 100;
+      let elevationChart = null;
+      let elevationFetchTimer = null;
+      let currentElevationData = [];
+
+      // 全画面表示機能
+      const fullscreenBtn = document.getElementById("fullscreen-btn");
+      fullscreenBtn.addEventListener("click", () => {
+        const docEl = document.documentElement;
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          if (docEl.requestFullscreen) {
+            docEl.requestFullscreen().catch((err) => console.warn(err));
+          } else if (docEl.webkitRequestFullscreen) {
+            docEl.webkitRequestFullscreen();
+          }
+          fullscreenBtn.innerText = "✖";
+          fullscreenBtn.title = "全画面表示を解除";
+        } else {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          }
+          fullscreenBtn.innerText = "⛶";
+          fullscreenBtn.title = "全画面表示";
+        }
+      });
+
+      // さんぽモードパネル切り替え
+      const btnToggleOsanpoBody = document.getElementById(
+        "btn-toggle-osanpo-body",
+      );
+      const osanpoPanelBody = document.getElementById("osanpo-panel-body");
+      btnToggleOsanpoBody.addEventListener("click", () => {
+        if (osanpoPanelBody.style.display === "none") {
+          osanpoPanelBody.style.display = "block";
+          btnToggleOsanpoBody.innerText = "非表示 ▲";
+        } else {
+          osanpoPanelBody.style.display = "none";
+          btnToggleOsanpoBody.innerText = "表示 ▼";
+        }
+      });
+
+      // 画面ロック機能
+      const btnLockScreen = document.getElementById("btn-lock-screen");
+      const btnUnlockScreen = document.getElementById("btn-unlock-screen");
+      const lockOverlay = document.getElementById("screen-lock-overlay");
+      let unlockClickCount = 0;
+
+      btnLockScreen.addEventListener("click", () => {
+        unlockClickCount = 0;
+        lockOverlay.style.display = "flex";
+      });
+
+      btnUnlockScreen.addEventListener("click", () => {
+        unlockClickCount++;
+        if (unlockClickCount >= 3) {
+          lockOverlay.style.display = "none";
+          unlockClickCount = 0;
+        }
+      });
+
+      // バックグラウンド追跡・Wake Lock制御関数
+      async function requestWakeLock() {
+        try {
+          if ("wakeLock" in navigator) {
+            wakeLock = await navigator.wakeLock.request("screen");
+          }
+        } catch (err) {
+          console.warn("Wake Lock取得失敗:", err);
+        }
+      }
+
+      function releaseWakeLock() {
+        if (wakeLock !== null) {
+          wakeLock.release().then(() => {
+            wakeLock = null;
+          });
+        }
+      }
+
+      function startBackgroundKeepAlive() {
+        try {
+          if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          if (audioCtx.state === "suspended") {
+            audioCtx.resume();
+          }
+          if (!keepAliveInterval) {
+            keepAliveInterval = setInterval(() => {
+              if (isTracking && audioCtx) {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                gain.gain.value = 0.001; // ほぼ無音
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.1);
+              }
+            }, 10000);
+          }
+        } catch (e) {
+          console.warn("バックグラウンド維持処理かいし失敗:", e);
+        }
+      }
+
+      function stopBackgroundKeepAlive() {
+        if (keepAliveInterval) {
+          clearInterval(keepAliveInterval);
+          keepAliveInterval = null;
+        }
+      }
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && isTracking) {
+          requestWakeLock();
+        }
+      });
+
+      // DEMタイルのピクセル解析用
+      const demCanvas = document.createElement("canvas");
+      demCanvas.width = 256;
+      demCanvas.height = 256;
+      const demCtx = demCanvas.getContext("2d", { willReadFrequently: true });
+      const demTileCache = {};
+
+      const smoothPointerPlugin = {
+        id: "smoothPointer",
+        afterDraw: (chart) => {
+          if (chart.config.options.customPointerDist === undefined) return;
+          const targetDist = chart.config.options.customPointerDist;
+          const meta = chart.getDatasetMeta(0);
+          if (!meta || !meta.data || meta.data.length < 2) return;
+          const data = chart.data.datasets[0].data;
+          if (!data || data.length === 0) return;
+
+          let idx = 0;
+          for (let i = 0; i < data.length - 1; i++) {
+            if (targetDist >= data[i].x && targetDist <= data[i + 1].x) {
+              idx = i;
+              break;
+            }
+            if (i === data.length - 2 && targetDist > data[i + 1].x) {
+              idx = data.length - 2;
+            }
+          }
+
+          const d1 = data[idx].x;
+          const d2 = data[idx + 1].x;
+          const ratio = d2 > d1 ? (targetDist - d1) / (d2 - d1) : 0;
+          const clampedRatio = Math.max(0, Math.min(1, ratio));
+
+          const p1 = meta.data[idx];
+          const p2 = meta.data[idx + 1];
+
+          if (!p1 || !p2) return;
+
+          const x = p1.x + (p2.x - p1.x) * clampedRatio;
+          const y = p1.y + (p2.y - p1.y) * clampedRatio;
+
+          const ctx = chart.ctx;
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(x, y, 5, 0, 2 * Math.PI);
+          ctx.fillStyle = "#0056b3";
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "#ffffff";
+          ctx.stroke();
+          ctx.restore();
+        },
+      };
+      Chart.register(smoothPointerPlugin);
+
+      const STORAGE_KEY = "heijo_multi_routes_v1";
+
+      // --- おもいでモードのルートをリセットする関数 ---
+      function resetOmoideRoute() {
+        if (isTourRunning) return;
+
+        // 描画されているルートやマーカーを削除
+        if (routePolyline) {
+          map.removeLayer(routePolyline);
+          routePolyline = null;
+        }
+        routeMarkers.forEach((item) => map.removeLayer(item.marker));
+        routeMarkers = [];
+        routePoints = [];
+        midpointMarkers.forEach((m) => map.removeLayer(m));
+        midpointMarkers = [];
+
+        // ボタンとUI要素の取得
+        const btnStartTour = document.getElementById("btn-start-tour");
+        const btnSaveRoute = document.getElementById("btn-save-route");
+        const btnDrawMode = document.getElementById("btn-draw-mode");
+        const editStoragePanel = document.getElementById("edit-storage-panel");
+        const routeSelect = document.getElementById("route-select");
+
+        // ボタンの無効化と初期状態へのリセット
+        if (btnStartTour) btnStartTour.disabled = true;
+        if (btnSaveRoute) btnSaveRoute.disabled = true;
+
+        if (btnDrawMode) {
+          btnDrawMode.disabled = false;
+          btnDrawMode.classList.remove("active");
+          btnDrawMode.innerText = "さんぽみちをつくる";
+        }
+
+        isDrawMode = false;
+
+        if (editStoragePanel) editStoragePanel.style.display = "none";
+        if (routeSelect) routeSelect.value = "";
+
+        updateStorageButtonsState();
+        document.getElementById("status").innerText = "";
+        document.getElementById("distance-info").style.display = "none";
+        document.getElementById("elevation-panel").style.display = "none";
+        currentElevationData = [];
+      }
+
+      // --- ハンバーガーメニューとパネル切り替え ---
+      const menuBtn = document.getElementById("menu-btn");
+      const sidebar = document.getElementById("sidebar");
+      const navOsanpo = document.getElementById("nav-osanpo");
+      const navOmoide = document.getElementById("nav-omoide");
+      const navImportCsv = document.getElementById("nav-import-csv");
+      const panelOsanpo = document.getElementById("panel-osanpo");
+      const panelOmoide = document.getElementById("panel-omoide");
+
+      menuBtn.addEventListener("click", () => {
+        sidebar.classList.toggle("open");
+      });
+
+      map = L.map("map", { zoomControl: false }).setView(
+        [34.68527701, 135.8049019],
+        15,
+      );
+      map.on("click", () => {
+        if (sidebar.classList.contains("open"))
+          sidebar.classList.remove("open");
+      });
+
+      function switchPanel(target) {
+        if (target === "osanpo") {
+          panelOsanpo.classList.add("active");
+          panelOmoide.classList.remove("active");
+          navOsanpo.classList.add("active");
+          navOmoide.classList.remove("active");
+
+          // さんぽモードに切り替えた際におもいでモードのルートをリセットする
+          resetOmoideRoute();
+
+          if (userMarker) {
+            map.removeLayer(userMarker);
+            userMarker = null;
+          }
+          if (lastUserLatLng) {
+            if (!trackingCircleMarker) {
+              trackingCircleMarker = L.circleMarker(
+                [lastUserLatLng.lat, lastUserLatLng.lng],
+                {
+                  radius: 8,
+                  fillColor: "#007bff",
+                  color: "#ffffff",
+                  weight: 2,
+                  opacity: 1,
+                  fillOpacity: 1,
+                },
+              ).addTo(map);
+            } else {
+              trackingCircleMarker.setLatLng([
+                lastUserLatLng.lat,
+                lastUserLatLng.lng,
+              ]);
+            }
+          }
+        } else {
+          panelOmoide.classList.add("active");
+          panelOsanpo.classList.remove("active");
+          navOmoide.classList.add("active");
+          navOsanpo.classList.remove("active");
+
+          if (!isTracking) {
+            if (trackingCircleMarker) {
+              map.removeLayer(trackingCircleMarker);
+              trackingCircleMarker = null;
+            }
+            if (lastUserLatLng) {
+              updateLocation(lastUserLatLng.lat, lastUserLatLng.lng);
+            }
+          }
+        }
+        sidebar.classList.remove("open");
+      }
+      navOsanpo.addEventListener("click", () => switchPanel("osanpo"));
+      navOmoide.addEventListener("click", () => switchPanel("omoide"));
+      navImportCsv.addEventListener("click", () => {
+        document.getElementById("csv-file-input").click();
+        sidebar.classList.remove("open");
+      });
+
+      // CSVのパースとマーカー生成処理
+      function parseCSVData(text) {
+        Papa.parse(text, {
+          header: true,
+          skipEmptyLines: true,
+          complete: function (results) {
+            spots = results.data
+              .map((row) => {
+                let photoVal = row.photo ? row.photo.trim() : "";
+                if (
+                  photoVal !== "" &&
+                  !photoVal.toLowerCase().endsWith(".jpg") &&
+                  !photoVal.toLowerCase().endsWith(".png")
+                ) {
+                  photoVal += ".jpg";
+                }
+                return {
+                  name: row.name,
+                  text: row.text,
+                  yomikata: row.text_yomikata || "",
+                  photo: photoVal,
+                  lat: parseFloat(row.lat),
+                  lng: parseFloat(row.lng),
+                  visited: false,
+                };
+              })
+              .filter((s) => !isNaN(s.lat) && !isNaN(s.lng));
+
+            if (spots.length === 0) return;
+
+            spotMarkers.forEach((s) => map.removeLayer(s.marker));
+            spotMarkers = spots.map((spot) => {
+              const marker = L.marker([spot.lat, spot.lng]).addTo(map);
+              let popupHtml = `<b>${spot.name}</b><br>${spot.text}`;
+              if (spot.photo) {
+                popupHtml += `<br><img src="photo/${spot.photo}" class="spot-popup-img" alt="${spot.name}" onerror="this.style.display='none';">`;
+              }
+              marker.bindPopup(popupHtml);
+              return { ...spot, marker };
+            });
+          },
+        });
+      }
+
+      // --- CSV自動読み込みロジック ---
+      async function loadCSV() {
+        try {
+          const response = await fetch("./sanpo.csv");
+          if (!response.ok) return;
+          const text = await response.text();
+          parseCSVData(text);
+        } catch (error) {}
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        updateRouteSelectOptions();
+        loadCSV();
+      });
+
+      function formatDistance(meters) {
+        if (meters >= 1000) return (meters / 1000).toFixed(2) + " km";
+        return (
+          Math.round(meters) + " m (" + (meters / 1000).toFixed(2) + " km)"
+        );
+      }
+
+      function getDistance(lat1, lng1, lat2, lng2) {
+        const R = 6371000;
+        const dLat = ((lat2 - lat1) * Math.PI) / 180;
+        const dLng = ((lng2 - lng1) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((lat1 * Math.PI) / 180) *
+            Math.cos((lat2 * Math.PI) / 180) *
+            Math.sin(dLng / 2) *
+            Math.sin(dLng / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }
+
+      function calculateArrayDistance(points) {
+        let total = 0;
+        for (let i = 0; i < points.length - 1; i++) {
+          total += getDistance(
+            points[i][0],
+            points[i][1],
+            points[i + 1][0],
+            points[i + 1][1],
+          );
+        }
+        return total;
+      }
+
+      function speak(text) {
+        if (!isSpeechEnabled) return;
+        if ("speechSynthesis" in window) {
+          if (window.speechSynthesis.speaking) return;
+          window.speechSynthesis.cancel();
+          setTimeout(() => {
+            const uttr = new SpeechSynthesisUtterance(text);
+            uttr.lang = "ja-JP";
+            uttr.rate = 1.0;
+            window.speechSynthesis.speak(uttr);
+          }, 100);
+        }
+      }
+
+      function stopSpeech() {
+        if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      }
+
+      function getSelectedParticipantsText() {
+        const selected = [];
+        if (
+          document
+            .getElementById("btn-user-taichi")
+            .classList.contains("active")
+        )
+          selected.push("たいち");
+        if (
+          document
+            .getElementById("btn-user-okaasan")
+            .classList.contains("active")
+        )
+          selected.push("おかあさん");
+        if (
+          document
+            .getElementById("btn-user-otousan")
+            .classList.contains("active")
+        )
+          selected.push("おとうさん");
+        if (selected.length === 0) return "さんぽ";
+        return selected.join("と") + "のさんぽ";
+      }
+
+      // 共通のスポット接近検知・音声再生ロジック
+      function checkSpotsProximityAndPlayAudio(userLat, userLng) {
+        if (spots.length === 0) return;
+        spotMarkers.forEach((spot) => {
+          const dist = getDistance(userLat, userLng, spot.lat, spot.lng);
+          if (dist <= 20) {
+            if (!spot.visited) {
+              spot.visited = true;
+              spot.marker.openPopup();
+              const speechText =
+                spot.yomikata && spot.yomikata.trim() !== ""
+                  ? spot.yomikata
+                  : spot.text;
+              speak(speechText);
+            }
+          } else {
+            spot.visited = false;
+          }
+        });
+      }
+
+      // スマホ表示でパネルと被らないようコントロールを右下に配置
+      L.control.zoom({ position: "bottomright" }).addTo(map);
+
+      // 最新写真を下敷きとして常時表示
+      const basePhoto = L.tileLayer(
+        "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
+        {
+          maxZoom: 21,
+          maxNativeZoom: 18,
+          attribution:
+            '© <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a>',
+        },
+      ).addTo(map);
+
+      // ▼▼ 風致地区のレイヤーを変数として定義 ▼▼
+      const scenicZoneLayer = L.geoJSON(
+        typeof json__0 !== "undefined" ? json__0 : null,
+        {
+          style: function (feature) {
+            const Z12 = feature.properties && feature.properties.Z12;
+            let fillColor = null;
+
+            if (Z12 === "第１種風致地区") {
+              fillColor = "pink";
+            } else if (Z12 === "第２種風致地区") {
+              fillColor = "skyblue";
+            } else if (Z12 === "第３種風致地区") {
+              fillColor = "yellow";
+            } else if (Z12 === "第４種風致地区") {
+              fillColor = "green";
+            } else if (Z12 === "第５種風致地区") {
+              fillColor = "orange";
+            }
+
+            if (fillColor) {
+              return {
+                stroke: false,
+                fillColor: fillColor,
+                fillOpacity: 0.7,
+              };
+            }
+            return {};
+          },
+        },
+      );
+
+      // 年代別写真をベースレイヤー（ラジオボタン）として定義
+      const baseLayers = {
+        "風致地区（1桃 2青 3黄 4緑 5橙）": scenicZoneLayer, // ← ここを変数に置き換え
+        "昭和59年～昭和61年（1984年～1986年）": L.tileLayer(
+          "https://cyberjapandata.gsi.go.jp/xyz/gazo3/{z}/{x}/{y}.jpg",
+          {
+            minZoom: 10,
+            maxZoom: 17,
+            attribution:
+              '© <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a>',
+          },
+        ),
+        "昭和54年～昭和58年（1979年～1983年）": L.tileLayer(
+          "https://cyberjapandata.gsi.go.jp/xyz/gazo2/{z}/{x}/{y}.jpg",
+          {
+            minZoom: 10,
+            maxZoom: 17,
+            attribution:
+              '© <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a>',
+          },
+        ),
+        "昭和49年～昭和53年（1974年～1978年）": L.tileLayer(
+          "https://cyberjapandata.gsi.go.jp/xyz/gazo1/{z}/{x}/{y}.jpg",
+          {
+            minZoom: 10,
+            maxZoom: 17,
+            attribution:
+              '© <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a>',
+          },
+        ),
+        "昭和36年～昭和44年（1961年～1969年）": L.tileLayer(
+          "https://cyberjapandata.gsi.go.jp/xyz/ort_old10/{z}/{x}/{y}.png",
+          {
+            minZoom: 10,
+            maxZoom: 17,
+            attribution:
+              '© <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a>',
+          },
+        ),
+      };
+
+      // レイヤーコントロールを右下（現在地記号の上）に配置するため、RecenterControlより先に追加
+      const layersControl = L.control
+        .layers(baseLayers, null, { position: "bottomright" })
+        .addTo(map);
+
+      const RecenterControl = L.Control.extend({
+        options: { position: "bottomright" },
+        onAdd: function (map) {
+          const container = L.DomUtil.create(
+            "div",
+            "leaflet-control-recenter leaflet-bar",
+          );
+          container.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" height="22px" viewBox="0 0 24 24" width="22px" fill="#666666"><path d="M0 0 h24v24H0z" fill="none"/><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>`;
+          container.title = "いまいるところにもどる";
+          L.DomEvent.disableClickPropagation(container);
+          L.DomEvent.on(container, "click", function () {
+            if (lastUserLatLng)
+              map.panTo([lastUserLatLng.lat, lastUserLatLng.lng]);
+            else
+              alert(
+                "現在地情報がまだ取得できていません。位置情報の許可をご確認ください。",
+              );
+          });
+          return container;
+        },
+      });
+      map.addControl(new RecenterControl());
+
+      // ▼▼ ラジオボタンの再選択で解除できるように修正（イベント伝播を停止） ▼▼
+      let lastSelectedRadio = null;
+      layersControl.getContainer().addEventListener("click", (e) => {
+        e.stopPropagation(); // 地図へのクリックの伝播を防ぐ
+        if (e.target.tagName === "INPUT" && e.target.type === "radio") {
+          if (lastSelectedRadio === e.target) {
+            e.target.checked = false;
+            lastSelectedRadio = null;
+            map.eachLayer((layer) => {
+              if (layer instanceof L.TileLayer && layer !== basePhoto) {
+                map.removeLayer(layer);
+              }
+            });
+            e.preventDefault();
+          } else {
+            lastSelectedRadio = e.target;
+          }
+        }
+      });
+      // ▲▲ ここまで修正 ▲▲
+
+      // 不透明度スライダーをレイヤ選択コントロールのメニュー内に追加
+      const opacityDiv = L.DomUtil.create("div", "");
+      opacityDiv.style.marginTop = "8px";
+      opacityDiv.style.borderTop = "1px solid #ddd";
+      opacityDiv.style.paddingTop = "8px";
+      opacityDiv.innerHTML = `
+        <label for="opacity-slider" style="font-weight: bold; font-size: 11px; color: #333; display: block; margin-bottom: 4px;">不透明度: <span id="opacity-val">100</span>%</label>
+        <input type="range" id="opacity-slider" min="0" max="100" value="100" style="width: 100%; cursor: pointer; accent-color: #888;">
+      `;
+      layersControl
+        .getContainer()
+        .querySelector(".leaflet-control-layers-list")
+        .appendChild(opacityDiv);
+
+      const slider = opacityDiv.querySelector("#opacity-slider");
+      const valLabel = opacityDiv.querySelector("#opacity-val");
+      L.DomEvent.disableClickPropagation(slider);
+
+      slider.addEventListener("input", (e) => {
+        const opacity = e.target.value / 100;
+        valLabel.textContent = e.target.value;
+
+        // タイルレイヤーの不透明度を変更
+        map.eachLayer((layer) => {
+          if (layer instanceof L.TileLayer && layer !== basePhoto) {
+            layer.setOpacity(opacity);
+          }
+        });
+
+        // ▼▼ 追加：GeoJSON（風致地区）が表示されている場合は不透明度を変更 ▼▼
+        if (map.hasLayer(scenicZoneLayer)) {
+          scenicZoneLayer.setStyle({ fillOpacity: opacity });
+        }
+      });
+
+      const layersContainer = layersControl.getContainer();
+
+      // ▼▼ レイヤー記号を再度押すと選択画面を閉じるための処理 ▼▼
+      const toggleBtn = layersContainer.querySelector(
+        ".leaflet-control-layers-toggle",
+      );
+      if (toggleBtn) {
+        toggleBtn.addEventListener(
+          "click",
+          (e) => {
+            if (
+              layersContainer.classList.contains(
+                "leaflet-control-layers-expanded",
+              )
+            ) {
+              layersControl.collapse();
+              e.stopPropagation(); // Leafletの内部展開処理への伝播を防ぐ
+              e.preventDefault();
+            }
+          },
+          true,
+        ); // キャプチャフェーズで登録
+      }
+      // ▲▲ ここまで追加 ▲▲
+
+      // ▼▼ 背景タイル選択が開いたときにパネルを一時的に非表示にする処理 ▼▼
+      const layersObserver = new MutationObserver(() => {
+        const isExpanded = layersContainer.classList.contains(
+          "leaflet-control-layers-expanded",
+        );
+        if (isExpanded) {
+          panelOsanpo.style.display = "none";
+          panelOmoide.style.display = "none";
+        } else {
+          panelOsanpo.style.display = "";
+          panelOmoide.style.display = "";
+        }
+      });
+      layersObserver.observe(layersContainer, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+      // ▲▲ ここまで追加 ▲▲
+
+      // --- さんぽモード下部表示UI更新（トグル機能付き） ---
+      function updateOsanpoDistanceUI(dist) {
+        const elem = document.getElementById("osanpo-distance");
+        if (!isTracking) {
+          elem.innerHTML = "";
+          return;
+        }
+        const kcal = Math.round((dist / 1000) * 50); // 1km = 50kcal
+        const contentStyle = isOsanpoDistanceContentVisible ? "block" : "none";
+        const btnText = isOsanpoDistanceContentVisible ? "非表示 ▼" : "表示 ▲";
+
+        elem.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span>🔴 きろくちゅう</span>
+            <button id="btn-toggle-osanpo-dist" style="font-size: 10px; padding: 2px 6px; cursor: pointer; background: #f0f0f0; border: 1px solid #ccc; border-radius: 3px;">${btnText}</button>
+          </div>
+          <div id="osanpo-dist-content" style="display: ${contentStyle}; margin-top: 6px; border-top: 1px solid #eee; padding-top: 6px; font-weight: normal;">
+            あるいたきょり: ${formatDistance(dist)}<br>しょうひカロリー: ${kcal} kcal
+          </div>
+        `;
+
+        const toggleBtn = document.getElementById("btn-toggle-osanpo-dist");
+        if (toggleBtn) {
+          toggleBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            isOsanpoDistanceContentVisible = !isOsanpoDistanceContentVisible;
+            updateOsanpoDistanceUI(dist);
+          });
+        }
+      }
+
+      // --- 実機GPSの監視処理 ---
+      if ("geolocation" in navigator) {
+        navigator.geolocation.watchPosition(
+          (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            lastUserLatLng = { lat, lng };
+
+            const isOsanpoActive = document
+              .getElementById("panel-osanpo")
+              .classList.contains("active");
+
+            if (isOsanpoActive) {
+              if (isTracking) {
+                // 停止（滞在）中のログ重複防止：前回記録地点から3m以上離れている場合のみ追加
+                let shouldAddLog = true;
+                if (trackedRoute.length > 0) {
+                  const lastPt = trackedRoute[trackedRoute.length - 1];
+                  const distFromLast = getDistance(
+                    lastPt[0],
+                    lastPt[1],
+                    lat,
+                    lng,
+                  );
+                  if (distFromLast < 3) {
+                    shouldAddLog = false;
+                  }
+                }
+                if (shouldAddLog) {
+                  trackedRoute.push([lat, lng]);
+                  if (!trackedPolyline) {
+                    trackedPolyline = L.polyline(trackedRoute, {
+                      color: "red",
+                      weight: 5,
+                      opacity: 0.8,
+                    }).addTo(map);
+                  } else {
+                    trackedPolyline.setLatLngs(trackedRoute);
+                  }
+                }
+                const dist = calculateArrayDistance(trackedRoute);
+                updateOsanpoDistanceUI(dist);
+                map.panTo([lat, lng]);
+              }
+
+              if (!trackingCircleMarker) {
+                trackingCircleMarker = L.circleMarker([lat, lng], {
+                  radius: 8,
+                  fillColor: "#007bff",
+                  color: "#ffffff",
+                  weight: 2,
+                  opacity: 1,
+                  fillOpacity: 1,
+                }).addTo(map);
+              } else {
+                trackingCircleMarker.setLatLng([lat, lng]);
+              }
+
+              if (userMarker) {
+                map.removeLayer(userMarker);
+                userMarker = null;
+              }
+              checkSpotsProximityAndPlayAudio(lat, lng);
+            } else {
+              if (trackingCircleMarker) {
+                map.removeLayer(trackingCircleMarker);
+                trackingCircleMarker = null;
+              }
+              if (!isTourRunning) {
+                updateLocation(lat, lng);
+              }
+            }
+          },
+          (error) => {
+            console.warn("GPSエラー:", error.message);
+          },
+          { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 },
+        );
+      } else {
+        alert("お使いのブラウザは位置情報きのうに対応していません。");
+      }
+
+      // 文頭6桁（年月日）昇順で並び替える処理を追加
+      function updateRouteSelectOptions() {
+        const select = document.getElementById("route-select");
+        const currentVal = select.value;
+        select.innerHTML = '<option value="">さんぽみちをえらぶ</option>';
+        const savedData = localStorage.getItem(STORAGE_KEY);
+        if (!savedData) return;
+        try {
+          const routesObj = JSON.parse(savedData);
+          const keys = Object.keys(routesObj);
+
+          // 文頭6桁（YYMMDD）を比較して昇順ソート
+          keys.sort((a, b) => {
+            const prefixA = a.slice(0, 6);
+            const prefixB = b.slice(0, 6);
+            return prefixA.localeCompare(prefixB);
+          });
+
+          for (const routeName of keys) {
+            const opt = document.createElement("option");
+            opt.value = routeName;
+            opt.textContent = routeName;
+            select.appendChild(opt);
+          }
+          select.value = currentVal;
+        } catch (e) {}
+        updateStorageButtonsState();
+      }
+
+      // --- さんぽモード ---
+      const btnStartTracking = document.getElementById("btn-start-tracking");
+      const btnStopTracking = document.getElementById("btn-stop-tracking");
+
+      btnStartTracking.addEventListener("click", () => {
+        isTracking = true;
+        trackedRoute = [];
+        if (trackedPolyline) {
+          map.removeLayer(trackedPolyline);
+          trackedPolyline = null;
+        }
+        if (trackingCircleMarker) {
+          map.removeLayer(trackingCircleMarker);
+          trackingCircleMarker = null;
+        }
+        btnStartTracking.style.display = "none";
+        btnStopTracking.disabled = false;
+
+        isOsanpoDistanceContentVisible = true;
+        updateOsanpoDistanceUI(0);
+
+        requestWakeLock();
+        startBackgroundKeepAlive();
+
+        if (lastUserLatLng) {
+          trackedRoute.push([lastUserLatLng.lat, lastUserLatLng.lng]);
+          trackingCircleMarker = L.circleMarker(
+            [lastUserLatLng.lat, lastUserLatLng.lng],
+            {
+              radius: 8,
+              fillColor: "#007bff",
+              color: "#ffffff",
+              weight: 2,
+              opacity: 1,
+              fillOpacity: 1,
+            },
+          ).addTo(map);
+          map.panTo([lastUserLatLng.lat, lastUserLatLng.lng]);
+        }
+      });
+
+      btnStopTracking.addEventListener("click", () => {
+        isTracking = false;
+        btnStartTracking.style.display = "block";
+        btnStartTracking.disabled = false;
+        btnStartTracking.innerText = "▶ はじめる";
+        btnStopTracking.disabled = true;
+
+        releaseWakeLock();
+        stopBackgroundKeepAlive();
+
+        if (trackingCircleMarker) {
+          map.removeLayer(trackingCircleMarker);
+          trackingCircleMarker = null;
+        }
+
+        // 停止時は「きろくちゅう」表示をクリア（非表示）にする
+        document.getElementById("osanpo-distance").innerHTML = "";
+
+        if (trackedRoute.length >= 2) {
+          let date = new Date();
+          let yy = String(date.getFullYear()).slice(-2);
+          let mm = String(date.getMonth() + 1).padStart(2, "0");
+          let dd = String(date.getDate()).padStart(2, "0");
+          let defaultName = `${yy}${mm}${dd}_さんぽ`;
+
+          let routeName = prompt(
+            "さんぽの記録を保存しますか？\n(キャンセルで保存せずにおわりします)",
+            defaultName,
+          );
+          if (routeName && routeName.trim() !== "") {
+            routeName = routeName.trim();
+            let routesObj = JSON.parse(
+              localStorage.getItem(STORAGE_KEY) || "{}",
+            );
+            routesObj[routeName] = trackedRoute;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
+            updateRouteSelectOptions();
+            alert(`「${routeName}」としておもいでに保存しました！`);
+          }
+        } else {
+          alert("移動距離が短すぎるため、記録されませんでした。");
+        }
+      });
+
+      // --- 高低差プロファイル関連 ---
+      function latLngToTilePixel(lat, lng, zoom) {
+        const n = Math.pow(2, zoom);
+        const xFloat = ((lng + 180) / 360) * n;
+        const latRad = (lat * Math.PI) / 180;
+        const yFloat =
+          ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) /
+            2) *
+          n;
+        const tileX = Math.floor(xFloat);
+        const tileY = Math.floor(yFloat);
+        const pixelX = Math.min(
+          255,
+          Math.max(0, Math.floor((xFloat - tileX) * 256)),
+        );
+        const pixelY = Math.min(
+          255,
+          Math.max(0, Math.floor((yFloat - tileY) * 256)),
+        );
+        return { tileX, tileY, pixelX, pixelY };
+      }
+
+      function getElevationFromDemRGB(r, g, b, a) {
+        if (a === 0) return null;
+        const x = r * 65536 + g * 256 + b;
+        if (x === 8388608) return null;
+        const h = x < 8388608 ? x : x - 16777216;
+        return h * 0.01;
+      }
+
+      async function getElevationForPoint(lat, lng) {
+        const sources = [
+          { type: "dem1a_png", zoom: 17 },
+          { type: "dem5a_png", zoom: 15 },
+          { type: "dem10b_png", zoom: 14 },
+          { type: "dem_png", zoom: 14 },
+        ];
+        for (const src of sources) {
+          const { tileX, tileY, pixelX, pixelY } = latLngToTilePixel(
+            lat,
+            lng,
+            src.zoom,
+          );
+          const key = `${src.type}/${src.zoom}/${tileX}/${tileY}`;
+          let img;
+          if (demTileCache[key] !== undefined) {
+            img = demTileCache[key];
+          } else {
+            img = await new Promise((resolve) => {
+              const image = new Image();
+              image.crossOrigin = "anonymous";
+              image.onload = () => {
+                demTileCache[key] = image;
+                resolve(image);
+              };
+              image.onerror = () => {
+                demTileCache[key] = null;
+                resolve(null);
+              };
+              image.src = `https://cyberjapandata.gsi.go.jp/xyz/${src.type}/${src.zoom}/${tileX}/${tileY}.png`;
+            });
+          }
+          if (img) {
+            try {
+              demCtx.clearRect(0, 0, 256, 256);
+              demCtx.drawImage(img, 0, 0);
+              const pixel = demCtx.getImageData(pixelX, pixelY, 1, 1).data;
+              const elev = getElevationFromDemRGB(
+                pixel[0],
+                pixel[1],
+                pixel[2],
+                pixel[3],
+              );
+              if (elev !== null) return elev;
+            } catch (e) {}
+          }
+        }
+        try {
+          const res = await fetch(
+            `https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon=${lng}&lat=${lat}&outtype=JSON`,
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (data && typeof data.elevation === "number")
+              return data.elevation;
+          }
+        } catch (e) {}
+        return null;
+      }
+
+      async function fetchElevationData(points) {
+        const panel = document.getElementById("elevation-panel");
+        if (!points || points.length < 2) {
+          panel.style.display = "none";
+          currentElevationData = [];
+          return;
+        }
+        const totalDist = calculateTotalRouteDistance();
+        if (totalDist <= 0) return;
+        const fullPath = generateInterpolatedPoints(points, 5);
+        const sampleCount = Math.min(
+          35,
+          Math.max(10, Math.floor(fullPath.length / 2)),
+        );
+        const sampledPoints = [];
+        const step = (fullPath.length - 1) / Math.max(1, sampleCount - 1);
+        for (let i = 0; i < sampleCount; i++) {
+          const idx = Math.min(Math.round(i * step), fullPath.length - 1);
+          sampledPoints.push(fullPath[idx]);
+        }
+        let cumulativeDist = 0;
+        const tempDistances = [0];
+        for (let i = 1; i < sampledPoints.length; i++) {
+          const prev = sampledPoints[i - 1];
+          const curr = sampledPoints[i];
+          cumulativeDist += getDistance(prev[0], prev[1], curr[0], curr[1]);
+          tempDistances.push(cumulativeDist);
+        }
+        const totalSampledDist = tempDistances[tempDistances.length - 1] || 1;
+        const distances = tempDistances.map(
+          (d) => (d / totalSampledDist) * totalDist,
+        );
+        const elevationPromises = sampledPoints.map((pt) =>
+          getElevationForPoint(pt[0], pt[1]),
+        );
+        const rawElevationData = await Promise.all(elevationPromises);
+        const validElevations = rawElevationData.map((val) =>
+          val !== null && !isNaN(val) ? val : null,
+        );
+        let baseElevation = null;
+        for (let v of validElevations) {
+          if (v !== null) {
+            baseElevation = v;
+            break;
+          }
+        }
+        if (baseElevation === null) baseElevation = 0;
+        const chartData = [];
+        let lastVal = baseElevation;
+        for (let i = 0; i < validElevations.length; i++) {
+          let elev = validElevations[i];
+          if (elev === null) {
+            let nextVal = lastVal;
+            for (let j = i + 1; j < validElevations.length; j++) {
+              if (validElevations[j] !== null) {
+                nextVal = validElevations[j];
+                break;
+              }
+            }
+            elev = (lastVal + nextVal) / 2;
+          }
+          lastVal = elev;
+          chartData.push({
+            x: Math.round(distances[i] * 10) / 10,
+            relativeY: Math.round((elev - baseElevation) * 10) / 10,
+            absoluteY: Math.round(elev * 10) / 10,
+            lat: sampledPoints[i][0],
+            lng: sampledPoints[i][1],
+          });
+        }
+        if (chartData.length > 0)
+          chartData[chartData.length - 1].x = Math.round(totalDist * 10) / 10;
+        currentElevationData = chartData;
+        renderElevationChart(chartData, totalDist);
+      }
+
+      function renderElevationChart(chartData, totalDist) {
+        const ctx = document.getElementById("elevationChart").getContext("2d");
+        if (elevationChart) elevationChart.destroy();
+        const roundedTotalDist = Math.round(totalDist * 10) / 10;
+        let stepSize = 100;
+        if (roundedTotalDist <= 200) stepSize = 50;
+        else if (roundedTotalDist <= 500) stepSize = 100;
+        else if (roundedTotalDist <= 1000) stepSize = 250;
+        else if (roundedTotalDist <= 3000) stepSize = 500;
+        else if (roundedTotalDist <= 7000) stepSize = 1000;
+        else if (roundedTotalDist <= 15000) stepSize = 2500;
+        else stepSize = 5000;
+
+        elevationChart = new Chart(ctx, {
+          type: "line",
+          data: {
+            datasets: [
+              {
+                label: "相対高さ (m)",
+                data: chartData.map((d) => ({
+                  x: d.x,
+                  y: d.relativeY,
+                  lat: d.lat,
+                  lng: d.lng,
+                })),
+                borderColor: "#007bff",
+                backgroundColor: "rgba(0, 123, 255, 0.15)",
+                fill: true,
+                tension: 0.35,
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHitRadius: 10,
+                yAxisID: "y",
+              },
+              {
+                label: "標高 (m)",
+                data: chartData.map((d) => ({ x: d.x, y: d.absoluteY })),
+                borderColor: "transparent",
+                backgroundColor: "transparent",
+                fill: false,
+                pointRadius: 0,
+                yAxisID: "y1",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            customPointerDist: 0,
+            interaction: { mode: "index", intersect: false },
+            onClick: (e, activeElements, chart) => {
+              if (activeElements.length > 0) {
+                const idx = activeElements[0].index;
+                const pt = chart.data.datasets[0].data[idx];
+                if (pt.lat !== undefined && pt.lng !== undefined) {
+                  L.popup()
+                    .setLatLng([pt.lat, pt.lng])
+                    .setContent(
+                      `<b>標高:</b> ${currentElevationData[idx].absoluteY} m (相対: ${pt.y} m)`,
+                    )
+                    .openOn(map);
+                }
+              }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    if (context.datasetIndex === 0) {
+                      return `相対高さ: ${context.parsed.y} m`;
+                    } else {
+                      return `標高: ${context.parsed.y} m`;
+                    }
+                  },
+                },
+              },
+            },
+            scales: {
+              x: {
+                type: "linear",
+                min: 0,
+                max: roundedTotalDist,
+                ticks: {
+                  stepSize: stepSize,
+                  font: { size: 8 },
+                  maxRotation: 0,
+                  callback: function (val) {
+                    if (val === 0) return "0";
+                    if (val % 1000 === 0) return val / 1000 + "km";
+                    if (val >= 1000) return (val / 1000).toFixed(1) + "k";
+                    return val + "m";
+                  },
+                },
+              },
+              y: {
+                type: "linear",
+                position: "left",
+                title: {
+                  display: true,
+                  text: "相対高さ(m)",
+                  font: { size: 9 },
+                },
+                ticks: { font: { size: 8 } },
+                grace: "10%",
+              },
+              y1: {
+                type: "linear",
+                position: "right",
+                title: { display: true, text: "標高(m)", font: { size: 9 } },
+                ticks: { font: { size: 8 } },
+                grid: { drawOnChartArea: false },
+                grace: "10%",
+              },
+            },
+          },
+        });
+      }
+
+      function updateChartPointer(currentDistance) {
+        if (!elevationChart) return;
+        elevationChart.options.customPointerDist = currentDistance;
+        elevationChart.update("none");
+      }
+
+      // --- おもいでモード（ルート作成・再生きのう） ---
+      function updateMidpointMarkers() {
+        midpointMarkers.forEach((m) => map.removeLayer(m));
+        midpointMarkers = [];
+        if (!isDrawMode || routeMarkers.length < 2) return;
+        for (let i = 0; i < routeMarkers.length - 1; i++) {
+          const p1 = routeMarkers[i].marker.getLatLng();
+          const p2 = routeMarkers[i + 1].marker.getLatLng();
+          const midLat = (p1.lat + p2.lat) / 2;
+          const midLng = (p1.lng + p2.lng) / 2;
+          const midIcon = L.divIcon({
+            className: "custom-midpoint-pin",
+            iconSize: [14, 14],
+            iconAnchor: [7, 7],
+          });
+          const midMarker = L.marker([midLat, midLng], {
+            icon: midIcon,
+            interactive: true,
+          }).addTo(map);
+          midMarker.bindTooltip("クリックして頂点を追加", { direction: "top" });
+          midMarker.on("click", (e) => {
+            if (!isDrawMode) return;
+            L.DomEvent.stopPropagation(e);
+            insertRouteMarkerAt(midLat, midLng, i + 1);
+          });
+          midpointMarkers.push(midMarker);
+        }
+      }
+
+      function updateStorageButtonsState() {
+        const select = document.getElementById("route-select");
+        const hasSelectedRoute = Boolean(select.value);
+        const hasEnoughPoints = routePoints.length >= 2;
+        const btnOverwrite = document.getElementById("btn-overwrite-route");
+        if (btnOverwrite)
+          btnOverwrite.disabled = !(hasSelectedRoute && hasEnoughPoints);
+      }
+
+      function calculateTotalRouteDistance() {
+        return calculateArrayDistance(routePoints);
+      }
+
+      function updateRouteAndDisplay() {
+        routePoints = routeMarkers.map((item) => {
+          const latlng = item.marker.getLatLng();
+          return [latlng.lat, latlng.lng];
+        });
+
+        if (routePoints.length > 0) {
+          if (!routePolyline) {
+            routePolyline = L.polyline(routePoints, {
+              color: "blue",
+              weight: 4,
+              opacity: 0.7,
+            }).addTo(map);
+          } else {
+            routePolyline.setLatLngs(routePoints);
+          }
+        } else {
+          if (routePolyline) {
+            map.removeLayer(routePolyline);
+            routePolyline = null;
+          }
+        }
+
+        routeMarkers.forEach((item) => {
+          if (isDrawMode) {
+            if (!map.hasLayer(item.marker)) map.addLayer(item.marker);
+          } else {
+            if (map.hasLayer(item.marker)) map.removeLayer(item.marker);
+          }
+        });
+
+        const totalRouteDist = calculateTotalRouteDistance();
+        const distInfoElem = document.getElementById("distance-info");
+        const progressTextElem = document.getElementById("tour-progress-text");
+        const altTextElem = document.getElementById("tour-altitude-text");
+        const btnToggleElev = document.getElementById("btn-toggle-elevation");
+
+        if (isDrawMode && routePoints.length > 0) {
+          progressTextElem.innerHTML = `<b>さんぽみちのきょり: ${formatDistance(totalRouteDist)}</b><br><span style="color:#666; font-size:10px;">・ピンをドラッグ：位置変更<br>・ピンをクリック：削除<br>・オレンジピン：クリックで頂点追加</span>`;
+          altTextElem.style.display = "none";
+          btnToggleElev.style.display = "none";
+          distInfoElem.style.display = "block";
+        } else if (!isTourRunning) {
+          distInfoElem.style.display = "none";
+        }
+
+        const btnStartTour = document.getElementById("btn-start-tour");
+        const btnSaveRoute = document.getElementById("btn-save-route");
+
+        if (routePoints.length >= 2) {
+          if (btnStartTour) btnStartTour.disabled = false;
+          if (btnSaveRoute) btnSaveRoute.disabled = false;
+          clearTimeout(elevationFetchTimer);
+          elevationFetchTimer = setTimeout(() => {
+            fetchElevationData(routePoints);
+          }, 400);
+        } else {
+          if (btnStartTour) btnStartTour.disabled = true;
+          if (btnSaveRoute) btnSaveRoute.disabled = true;
+          document.getElementById("elevation-panel").style.display = "none";
+          currentElevationData = [];
+        }
+        updateStorageButtonsState();
+        updateMidpointMarkers();
+      }
+
+      function insertRouteMarkerAt(lat, lng, insertIndex) {
+        const pointId = nextPointId++;
+        const pinIcon = L.divIcon({
+          className: "custom-route-pin",
+          iconSize: [7, 7],
+          iconAnchor: [4, 4],
+        });
+        const marker = L.marker([lat, lng], { icon: pinIcon, draggable: true });
+        if (isDrawMode) marker.addTo(map);
+
+        marker.on("drag", () => {
+          if (isDrawMode) updateRouteAndDisplay();
+        });
+        marker.on("dragend", () => {
+          if (isDrawMode) updateRouteAndDisplay();
+        });
+        marker.on("click", (e) => {
+          if (!isDrawMode) return;
+          L.DomEvent.stopPropagation(e);
+          const popupContent = document.createElement("div");
+          popupContent.innerHTML = `<b>さんぽみち地点</b><br><button class="delete-point-btn">この地点を削除</button>`;
+          popupContent
+            .querySelector(".delete-point-btn")
+            .addEventListener("click", () => {
+              map.closePopup();
+              map.removeLayer(marker);
+              routeMarkers = routeMarkers.filter((item) => item.id !== pointId);
+              updateRouteAndDisplay();
+            });
+          marker.bindPopup(popupContent).openPopup();
+        });
+        routeMarkers.splice(insertIndex, 0, { marker, id: pointId });
+        updateRouteAndDisplay();
+      }
+
+      function addRouteMarker(lat, lng) {
+        insertRouteMarkerAt(lat, lng, routeMarkers.length);
+      }
+
+      function updateLocation(userLat, userLng, doPan = false) {
+        if (doPan) {
+          map.panTo([userLat, userLng]);
+        }
+        if (lastUserLatLng) {
+          const dLat = userLat - lastUserLatLng.lat;
+          const dLng = userLng - lastUserLatLng.lng;
+          if (Math.abs(dLat) > 0.0000001 || Math.abs(dLng) > 0.0000001) {
+            if (dLng > 0) isMovingEast = true;
+            else if (dLng < 0) isMovingEast = false;
+
+            const screenDx = dLng * Math.cos((userLat * Math.PI) / 180);
+            const screenDy = -dLat;
+            lastAngleDeg = (Math.atan2(screenDy, screenDx) * 180) / Math.PI;
+          }
+        }
+        lastUserLatLng = { lat: userLat, lng: userLng };
+
+        const activeIcons = [];
+        if (
+          document
+            .getElementById("btn-user-taichi")
+            .classList.contains("active")
+        )
+          activeIcons.push("photo/000-1.png");
+        if (
+          document
+            .getElementById("btn-user-okaasan")
+            .classList.contains("active")
+        )
+          activeIcons.push("photo/000-2.png");
+        if (
+          document
+            .getElementById("btn-user-otousan")
+            .classList.contains("active")
+        )
+          activeIcons.push("photo/000-3.png");
+        if (activeIcons.length === 0) activeIcons.push("photo/000-1.png");
+
+        let scaleXStr = isMovingEast ? "scaleX(-1)" : "scaleX(1)";
+        let imagesHtml = activeIcons
+          .map(
+            (src) =>
+              `<img src="${src}" style="width: 40px; height: 40px; display: block; transform: rotate(${-lastAngleDeg}deg) ${scaleXStr};" onerror="this.style.display='none';">`,
+          )
+          .join("");
+        const containerWidth = activeIcons.length * 40;
+        const runnerDivIcon = L.divIcon({
+          html: `<div style="display: flex; flex-direction: row-reverse; align-items: center; justify-content: center; width: ${containerWidth}px; height: 40px; transform: rotate(${lastAngleDeg}deg); transform-origin: center center;">${imagesHtml}</div>`,
+          className: "",
+          iconSize: [containerWidth, 40],
+          iconAnchor: [containerWidth / 2, 20],
+        });
+
+        if (!userMarker) {
+          userMarker = L.marker([userLat, userLng], {
+            icon: runnerDivIcon,
+          }).addTo(map);
+        } else {
+          userMarker.setIcon(runnerDivIcon);
+          userMarker.setLatLng([userLat, userLng]);
+        }
+
+        checkSpotsProximityAndPlayAudio(userLat, userLng);
+      }
+
+      map.on("click", (e) => {
+        const clickLat = e.latlng.lat;
+        const clickLng = e.latlng.lng;
+        const isOsanpoActive = document
+          .getElementById("panel-osanpo")
+          .classList.contains("active");
+
+        if (isOsanpoActive) {
+          if (isTracking) return;
+
+          lastUserLatLng = { lat: clickLat, lng: clickLng };
+          if (!trackingCircleMarker) {
+            trackingCircleMarker = L.circleMarker([clickLat, clickLng], {
+              radius: 8,
+              fillColor: "#007bff",
+              color: "#ffffff",
+              weight: 2,
+              opacity: 1,
+              fillOpacity: 1,
+            }).addTo(map);
+          } else {
+            trackingCircleMarker.setLatLng([clickLat, clickLng]);
+          }
+          if (userMarker) {
+            map.removeLayer(userMarker);
+            userMarker = null;
+          }
+          map.panTo([clickLat, clickLng]);
+        } else {
+          if (
+            isDrawMode &&
+            document.getElementById("panel-omoide").classList.contains("active")
+          ) {
+            addRouteMarker(clickLat, clickLng);
+          } else if (!isTourRunning) {
+            updateLocation(clickLat, clickLng);
+          }
+        }
+      });
+
+      const btnDrawMode = document.getElementById("btn-draw-mode");
+      const btnStartTour = document.getElementById("btn-start-tour");
+      const btnPauseTour = document.getElementById("btn-pause-tour");
+      const btnStopTour = document.getElementById("btn-stop-tour");
+      const btnSaveRoute = document.getElementById("btn-save-route");
+      const btnOverwriteRoute = document.getElementById("btn-overwrite-route");
+      const btnRenameRoute = document.getElementById("btn-rename-route");
+      const btnDeleteSavedRoute = document.getElementById(
+        "btn-delete-saved-route",
+      );
+      const btnResetRoute = document.getElementById("btn-reset-route");
+      const btnStopSpeech = document.getElementById("btn-stop-speech");
+      const routeSelect = document.getElementById("route-select");
+      const editStoragePanel = document.getElementById("edit-storage-panel");
+
+      const btnSpeedNormal = document.getElementById("btn-speed-normal");
+      const btnSpeedExpress = document.getElementById("btn-speed-express");
+      const btnSpeedLimited = document.getElementById("btn-speed-limited");
+      const btnSpeedShinkansen = document.getElementById(
+        "btn-speed-shinkansen",
+      );
+      const btnExportRoutes = document.getElementById("btn-export-routes");
+      const btnImportRoutes = document.getElementById("btn-import-routes");
+      const btnImportHelp = document.getElementById("btn-import-help");
+      const routeFileInput = document.getElementById("route-file-input");
+      const csvFileInput = document.getElementById("csv-file-input");
+
+      const btnToggleElevation = document.getElementById(
+        "btn-toggle-elevation",
+      );
+      const elevationPanel = document.getElementById("elevation-panel");
+
+      btnToggleElevation.addEventListener("click", () => {
+        if (
+          elevationPanel.style.display === "none" ||
+          elevationPanel.style.display === ""
+        ) {
+          elevationPanel.style.display = "block";
+          btnToggleElevation.style.background = "#007bff";
+          btnToggleElevation.style.color = "white";
+        } else {
+          elevationPanel.style.display = "none";
+          btnToggleElevation.style.background = "#eef6ff";
+          btnToggleElevation.style.color = "#007bff";
+        }
+      });
+
+      btnStopSpeech.addEventListener("click", () => {
+        isSpeechEnabled = !isSpeechEnabled;
+        if (isSpeechEnabled) {
+          btnStopSpeech.innerHTML = "🔊";
+          btnStopSpeech.style.background = "#d4edda";
+          btnStopSpeech.title = "音声を停止するにはクリック";
+        } else {
+          btnStopSpeech.innerHTML = "🔇";
+          btnStopSpeech.style.background = "#ffdddd";
+          btnStopSpeech.title = "音声を再生するにはクリック";
+          stopSpeech();
+        }
+      });
+
+      function setTourSpeed(intervalMs, activeBtn) {
+        tourSpeedInterval = intervalMs;
+        btnSpeedNormal.classList.remove("active");
+        btnSpeedExpress.classList.remove("active");
+        btnSpeedLimited.classList.remove("active");
+        btnSpeedShinkansen.classList.remove("active");
+        activeBtn.classList.add("active");
+        if (isTourRunning) restartTourTimer();
+      }
+
+      btnSpeedNormal.addEventListener("click", () =>
+        setTourSpeed(100, btnSpeedNormal),
+      );
+      btnSpeedExpress.addEventListener("click", () =>
+        setTourSpeed(50, btnSpeedExpress),
+      );
+      btnSpeedLimited.addEventListener("click", () =>
+        setTourSpeed(25, btnSpeedLimited),
+      );
+      btnSpeedShinkansen.addEventListener("click", () =>
+        setTourSpeed(10, btnSpeedShinkansen),
+      );
+
+      document.querySelectorAll(".participant-btn").forEach((btn) => {
+        btn.addEventListener("click", () => btn.classList.toggle("active"));
+      });
+
+      routeSelect.addEventListener("change", () => {
+        const hasSelected = Boolean(routeSelect.value);
+        if (!isDrawMode) {
+          btnDrawMode.innerText = hasSelected
+            ? "へんしゅうする"
+            : "さんぽみちをつくる";
+        }
+        updateStorageButtonsState();
+        if (hasSelected) loadSelectedRoute();
+      });
+
+      btnDrawMode.addEventListener("click", () => {
+        if (isTourRunning) return;
+        isDrawMode = !isDrawMode;
+        const distInfoElem = document.getElementById("distance-info");
+        const hasSelected = Boolean(routeSelect.value);
+
+        let labelText;
+        if (isDrawMode) {
+          labelText = "へんしゅうをおわる";
+          editStoragePanel.style.display = "flex";
+        } else {
+          labelText = hasSelected ? "へんしゅうする" : "さんぽみちをつくる";
+          editStoragePanel.style.display = "none";
+        }
+        btnDrawMode.innerText = labelText;
+
+        if (isDrawMode) {
+          btnDrawMode.classList.add("active");
+          updateRouteAndDisplay();
+        } else {
+          btnDrawMode.classList.remove("active");
+          document.getElementById("status").innerText = "";
+          distInfoElem.style.display = "none";
+          midpointMarkers.forEach((m) => map.removeLayer(m));
+          midpointMarkers = [];
+          updateRouteAndDisplay();
+        }
+      });
+
+      function generateInterpolatedPoints(points, stepDistanceMeters = 5) {
+        let fullPath = [];
+        for (let i = 0; i < points.length - 1; i++) {
+          const p1 = points[i];
+          const p2 = points[i + 1];
+          const totalDist = getDistance(p1[0], p1[1], p2[0], p2[1]);
+          const steps = Math.max(1, Math.floor(totalDist / stepDistanceMeters));
+          for (let s = 0; s <= steps; s++) {
+            const ratio = s / steps;
+            const lat = p1[0] + (p2[0] - p1[0]) * ratio;
+            const lng = p1[1] + (p2[1] - p1[1]) * ratio;
+            fullPath.push([lat, lng]);
+          }
+        }
+        return fullPath;
+      }
+
+      function restartTourTimer() {
+        if (tourInterval) clearInterval(tourInterval);
+        const totalDist = calculateTotalRouteDistance();
+        const distInfoElem = document.getElementById("distance-info");
+        const progressTextElem = document.getElementById("tour-progress-text");
+        const altTextElem = document.getElementById("tour-altitude-text");
+        const btnToggleElev = document.getElementById("btn-toggle-elevation");
+
+        tourInterval = setInterval(() => {
+          if (!isTourPaused) {
+            if (tourCurrentIndex < tourPath.length) {
+              const pt = tourPath[tourCurrentIndex];
+              updateLocation(pt[0], pt[1], true);
+              const currentDist =
+                (totalDist * tourCurrentIndex) /
+                Math.max(1, tourPath.length - 1);
+              const progressPercent = Math.round(
+                (tourCurrentIndex / Math.max(1, tourPath.length - 1)) * 100,
+              );
+              updateChartPointer(currentDist);
+
+              distInfoElem.style.display = "block";
+              progressTextElem.innerHTML = `<b> ${formatDistance(currentDist)} / ${formatDistance(totalDist)} (${progressPercent}%)</b>`;
+
+              // 高度の表示
+              let altValStr = "-- m";
+              if (currentElevationData && currentElevationData.length > 0) {
+                let closest = currentElevationData[0];
+                let minDiff = Math.abs(currentDist - closest.x);
+                for (let i = 1; i < currentElevationData.length; i++) {
+                  let diff = Math.abs(currentDist - currentElevationData[i].x);
+                  if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = currentElevationData[i];
+                  }
+                }
+                if (closest && closest.relativeY !== undefined) {
+                  altValStr = closest.relativeY + " m";
+                }
+              }
+              altTextElem.style.display = "block";
+              altTextElem.innerText = `たかさ: ${altValStr}`;
+              btnToggleElev.style.display = "inline-block";
+
+              tourCurrentIndex++;
+            } else {
+              clearInterval(tourInterval);
+              isTourRunning = false;
+              btnPauseTour.style.display = "none";
+              btnStopTour.style.display = "none";
+              btnDrawMode.style.display = "inline-block";
+              btnStartTour.style.display = "inline-block";
+              document.getElementById("route-select-container").style.display =
+                "block";
+              isDrawMode = false;
+              btnDrawMode.classList.remove("active");
+              editStoragePanel.style.display = "none";
+              const hasSelected = Boolean(routeSelect.value);
+              btnDrawMode.innerText = hasSelected
+                ? "へんしゅうする"
+                : "さんぽみちをつくる";
+
+              // 再生終了時に各種ボタンの操作を有効化
+              btnStartTour.disabled = false;
+              btnDrawMode.disabled = false;
+              if (btnSaveRoute) btnSaveRoute.disabled = false;
+              if (btnDeleteSavedRoute) btnDeleteSavedRoute.disabled = false;
+              if (btnRenameRoute) btnRenameRoute.disabled = false;
+
+              progressTextElem.innerHTML = `<b>あるいたきょり: ${formatDistance(totalDist)}</b>`;
+              updateChartPointer(totalDist);
+              if (btnResetRoute) btnResetRoute.disabled = false;
+              updateStorageButtonsState();
+              speak(
+                `${getSelectedParticipantsText()}がしゅうりょうしました。おつかれさまでした。`,
+              );
+            }
+          }
+        }, tourSpeedInterval);
+      }
+
+      btnStartTour.addEventListener("click", () => {
+        if (routePoints.length < 2) return;
+        isDrawMode = false;
+        editStoragePanel.style.display = "none";
+        updateRouteAndDisplay();
+
+        // 散歩スタート時に詳細設定を閉じる
+        const detailsElem = document.getElementById("details-advanced");
+        if (detailsElem) detailsElem.open = false;
+
+        btnDrawMode.classList.remove("active");
+        btnStartTour.disabled = true;
+
+        // 散歩中は「さんぽみちをつくる（へんしゅうする）」と「さんぽスタート」、「プルダウン」を非表示
+        btnDrawMode.style.display = "none";
+        btnStartTour.style.display = "none";
+        document.getElementById("route-select-container").style.display =
+          "none";
+
+        if (btnSaveRoute) btnSaveRoute.disabled = true;
+        if (btnOverwriteRoute) btnOverwriteRoute.disabled = true;
+        if (btnRenameRoute) btnRenameRoute.disabled = true;
+        if (btnDeleteSavedRoute) btnDeleteSavedRoute.disabled = true;
+        if (btnResetRoute) btnResetRoute.disabled = true;
+        btnPauseTour.style.display = "inline-block";
+        btnPauseTour.disabled = false;
+        btnPauseTour.innerText = "⏸ きゅうけい";
+        btnStopTour.style.display = "inline-block";
+        btnStopTour.disabled = false;
+        midpointMarkers.forEach((m) => map.removeLayer(m));
+        midpointMarkers = [];
+        isTourRunning = true;
+        isTourPaused = false;
+        tourPath = generateInterpolatedPoints(routePoints, 5);
+        tourCurrentIndex = 0;
+        restartTourTimer();
+      });
+
+      btnPauseTour.addEventListener("click", () => {
+        if (!isTourRunning) return;
+        isTourPaused = !isTourPaused;
+        if (isTourPaused) {
+          btnPauseTour.innerText = "▶ さいかい";
+        } else {
+          btnPauseTour.innerText = "⏸ きゅうけい";
+        }
+      });
+
+      btnStopTour.addEventListener("click", () => {
+        if (!isTourRunning) return;
+        clearInterval(tourInterval);
+        isTourRunning = false;
+        isTourPaused = false;
+        btnPauseTour.style.display = "none";
+        btnStopTour.style.display = "none";
+
+        // 非表示のボタンとプルダウンを復元
+        btnDrawMode.style.display = "inline-block";
+        btnStartTour.style.display = "inline-block";
+        document.getElementById("route-select-container").style.display =
+          "block";
+        isDrawMode = false;
+        btnDrawMode.classList.remove("active");
+        editStoragePanel.style.display = "none";
+        const hasSelected = Boolean(routeSelect.value);
+        btnDrawMode.innerText = hasSelected
+          ? "へんしゅうする"
+          : "さんぽみちをつくる";
+
+        btnStartTour.disabled = false;
+        btnDrawMode.disabled = false;
+        if (btnSaveRoute) btnSaveRoute.disabled = false;
+        if (btnDeleteSavedRoute) btnDeleteSavedRoute.disabled = false;
+        if (btnRenameRoute) btnRenameRoute.disabled = false;
+        if (btnResetRoute) btnResetRoute.disabled = false;
+        updateStorageButtonsState();
+
+        document.getElementById("distance-info").style.display = "none";
+        stopSpeech();
+      });
+
+      if (btnSaveRoute) {
+        btnSaveRoute.addEventListener("click", () => {
+          if (routePoints.length < 2) return;
+          let date = new Date();
+          let yy = String(date.getFullYear()).slice(-2);
+          let mm = String(date.getMonth() + 1).padStart(2, "0");
+          let dd = String(date.getDate()).padStart(2, "0");
+          let defaultName = `${yy}${mm}${dd}_さんぽ`;
+
+          let routeName = prompt(
+            "ほぞんするさんぽみちのなまえをにゅうりょくしてください:",
+            defaultName,
+          );
+          if (!routeName || routeName.trim() === "") return;
+          let routesObj = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+          routesObj[routeName.trim()] = routePoints;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
+          updateRouteSelectOptions();
+          document.getElementById("route-select").value = routeName.trim();
+          if (!isDrawMode) {
+            btnDrawMode.innerText = "へんしゅうする";
+          }
+          updateStorageButtonsState();
+          alert(`さんぽみち「${routeName.trim()}」をほぞんしました！`);
+        });
+      }
+
+      if (btnOverwriteRoute) {
+        btnOverwriteRoute.addEventListener("click", () => {
+          const routeName = routeSelect.value;
+          if (!routeName) {
+            alert(
+              "うわがきほぞんするさんぽみちをプルダウンからえらんでください。",
+            );
+            return;
+          }
+          if (routePoints.length < 2) return;
+          if (
+            !confirm(
+              `えらんでいるさんぽみち「${routeName}」をうわがきほぞんしてもよろしいですか？`,
+            )
+          )
+            return;
+          let routesObj = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+          routesObj[routeName] = routePoints;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
+          alert(`さんぽみち「${routeName}」をうわがきほぞんしました！`);
+        });
+      }
+
+      if (btnRenameRoute) {
+        btnRenameRoute.addEventListener("click", () => {
+          const oldName = routeSelect.value;
+          if (!oldName) {
+            alert("なまえをかえるさんぽみちをプルダウンからえらんでください。");
+            return;
+          }
+          let newName = prompt(
+            "あたらしいさんぽみちのなまえをにゅうりょくしてください:",
+            oldName,
+          );
+          if (!newName || newName.trim() === "" || newName.trim() === oldName)
+            return;
+          try {
+            let routesObj = JSON.parse(
+              localStorage.getItem(STORAGE_KEY) || "{}",
+            );
+            if (
+              routesObj[newName.trim()] &&
+              !confirm(
+                `「${newName.trim()}」は既に存在します。上書きしますか？`,
+              )
+            )
+              return;
+            routesObj[newName.trim()] = routesObj[oldName];
+            delete routesObj[oldName];
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
+            updateRouteSelectOptions();
+            routeSelect.value = newName.trim();
+            updateStorageButtonsState();
+            alert(`さんぽみちのなまえを「${newName.trim()}」にかえました！`);
+          } catch (e) {
+            alert("名称変更に失敗しました。");
+          }
+        });
+      }
+
+      function loadSelectedRoute() {
+        const routeName = document.getElementById("route-select").value;
+        if (!routeName) return;
+        try {
+          const routesObj = JSON.parse(
+            localStorage.getItem(STORAGE_KEY) || "{}",
+          );
+          const points = routesObj[routeName];
+          if (!Array.isArray(points) || points.length < 2) return;
+          if (routePolyline) {
+            map.removeLayer(routePolyline);
+            routePolyline = null;
+          }
+          routeMarkers.forEach((item) => map.removeLayer(item.marker));
+          routeMarkers = [];
+
+          isDrawMode = false;
+          editStoragePanel.style.display = "none";
+          points.forEach((pt) => addRouteMarker(pt[0], pt[1]));
+          updateRouteAndDisplay();
+        } catch (e) {}
+      }
+
+      if (btnDeleteSavedRoute) {
+        btnDeleteSavedRoute.addEventListener("click", () => {
+          const routeName = document.getElementById("route-select").value;
+          if (!routeName) {
+            alert("さくじょするさんぽみちをプルダウンからえらんでください。");
+            return;
+          }
+          if (
+            !confirm(`さんぽみち「${routeName}」を削除してもよろしいですか？`)
+          )
+            return;
+          try {
+            let routesObj = JSON.parse(
+              localStorage.getItem(STORAGE_KEY) || "{}",
+            );
+            delete routesObj[routeName];
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
+            updateRouteSelectOptions();
+            if (!isDrawMode) {
+              btnDrawMode.innerText = "さんぽみちをつくる";
+            }
+            alert(`さんぽみち「${routeName}」をけしました。`);
+          } catch (e) {}
+        });
+      }
+
+      function downloadFile(content, mimeType, filename) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      function escapeXml(unsafe) {
+        return unsafe.replace(/[<>&'"]/g, function (c) {
+          switch (c) {
+            case "<":
+              return "&lt;";
+            case ">":
+              return "&gt;";
+            case "&":
+              return "&amp;";
+            case "'":
+              return "&apos;";
+            case '"':
+              return "&quot;";
+          }
+        });
+      }
+
+      function routesToGPX(routesObj) {
+        let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+        gpx += `<gpx version="1.1" creator="さんぽマップ" xmlns="http://www.topografix.com/GPX/1/1">\n`;
+        for (const name in routesObj) {
+          gpx += `  <trk>\n    <name>${escapeXml(name)}</name>\n    <trkseg>\n`;
+          const points = routesObj[name];
+          for (const pt of points) {
+            gpx += `      <trkpt lat="${pt[0]}" lon="${pt[1]}"></trkpt>\n`;
+          }
+          gpx += `    </trkseg>\n  </trk>\n`;
+        }
+        gpx += `</gpx>`;
+        return gpx;
+      }
+
+      function closeExportMenu() {
+        const existing = document.getElementById("export-menu");
+        if (existing) existing.remove();
+        document.removeEventListener(
+          "click",
+          handleExportMenuOutsideClick,
+          true,
+        );
+      }
+
+      function handleExportMenuOutsideClick(e) {
+        const menu = document.getElementById("export-menu");
+        if (menu && !menu.contains(e.target) && e.target !== btnExportRoutes) {
+          closeExportMenu();
+        }
+      }
+
+      // 保存メニュー（複数選択＆JSON/GPX選択対応）
+      function openExportMenu() {
+        closeExportMenu();
+        const savedData = localStorage.getItem(STORAGE_KEY);
+        let routesObj = {};
+        try {
+          routesObj = JSON.parse(savedData || "{}");
+        } catch (e) {}
+        const routeNames = Object.keys(routesObj);
+        if (routeNames.length === 0) {
+          alert("ほぞんされているさんぽみちがありません。");
+          return;
+        }
+
+        const menu = document.createElement("div");
+        menu.id = "export-menu";
+        menu.className = "export-menu";
+
+        const title = document.createElement("div");
+        title.className = "export-menu-title";
+        title.textContent = "保存するさんぽみちを選ぶ";
+        menu.appendChild(title);
+
+        // フォーマット選択
+        const formatDiv = document.createElement("div");
+        formatDiv.style.marginBottom = "8px";
+        formatDiv.style.fontSize = "11px";
+        formatDiv.innerHTML = `
+          <b>形式:</b>
+          <label style="margin-left: 6px; cursor: pointer;"><input type="radio" name="exp-fmt" value="json" checked> JSON</label>
+          <label style="margin-left: 6px; cursor: pointer;"><input type="radio" name="exp-fmt" value="gpx"> GPX</label>
+        `;
+        menu.appendChild(formatDiv);
+
+        // すべて選択チェックボックス
+        const selectAllDiv = document.createElement("div");
+        selectAllDiv.style.fontSize = "11px";
+        selectAllDiv.style.paddingBottom = "4px";
+        selectAllDiv.style.borderBottom = "1px solid #eee";
+        selectAllDiv.style.marginBottom = "6px";
+        selectAllDiv.innerHTML = `<label style="font-weight: bold; cursor: pointer;"><input type="checkbox" id="chk-export-all" checked> すべて選択</label>`;
+        menu.appendChild(selectAllDiv);
+
+        // ルート一覧リスト
+        const listDiv = document.createElement("div");
+        listDiv.style.maxHeight = "140px";
+        listDiv.style.overflowY = "auto";
+
+        routeNames.forEach((name) => {
+          const item = document.createElement("label");
+          item.style.display = "block";
+          item.style.fontSize = "12px";
+          item.style.padding = "3px 0";
+          item.style.cursor = "pointer";
+          item.innerHTML = `<input type="checkbox" class="chk-export-item" value="${escapeXml(name)}" checked> ${escapeXml(name)}`;
+          listDiv.appendChild(item);
+        });
+        menu.appendChild(listDiv);
+
+        // 保存ボタン
+        const btnSave = document.createElement("button");
+        btnSave.type = "button";
+        btnSave.style.width = "100%";
+        btnSave.style.marginTop = "8px";
+        btnSave.style.padding = "6px";
+        btnSave.style.background = "#007bff";
+        btnSave.style.color = "white";
+        btnSave.style.border = "none";
+        btnSave.style.borderRadius = "4px";
+        btnSave.style.cursor = "pointer";
+        btnSave.textContent = "保存する";
+        menu.appendChild(btnSave);
+
+        document.body.appendChild(menu);
+
+        const chkAll = document.getElementById("chk-export-all");
+        chkAll.addEventListener("change", (e) => {
+          const items = menu.querySelectorAll(".chk-export-item");
+          items.forEach((chk) => (chk.checked = e.target.checked));
+        });
+
+        btnSave.addEventListener("click", () => {
+          const selectedChks = menu.querySelectorAll(
+            ".chk-export-item:checked",
+          );
+          if (selectedChks.length === 0) {
+            alert("保存するさんぽみちを1つ以上選んでください。");
+            return;
+          }
+          const fmt = menu.querySelector('input[name="exp-fmt"]:checked').value;
+          const selectedObj = {};
+          selectedChks.forEach((chk) => {
+            const key = chk.value;
+            if (routesObj[key]) selectedObj[key] = routesObj[key];
+          });
+
+          if (fmt === "json") {
+            downloadFile(
+              JSON.stringify(selectedObj, null, 2),
+              "application/json",
+              "sanpo_routes.json",
+            );
+          } else {
+            const gpxData = routesToGPX(selectedObj);
+            downloadFile(gpxData, "application/gpx+xml", "sanpo_routes.gpx");
+          }
+          closeExportMenu();
+        });
+
+        const rect = btnExportRoutes.getBoundingClientRect();
+        const menuWidth = menu.offsetWidth;
+        let left = rect.left;
+        if (left + menuWidth > window.innerWidth - 8) {
+          left = window.innerWidth - menuWidth - 8;
+        }
+        menu.style.top = `${rect.bottom + 4 + window.scrollY}px`;
+        menu.style.left = `${Math.max(8, left) + window.scrollX}px`;
+
+        setTimeout(() => {
+          document.addEventListener(
+            "click",
+            handleExportMenuOutsideClick,
+            true,
+          );
+        }, 0);
+      }
+
+      btnExportRoutes.addEventListener("click", openExportMenu);
+
+      btnImportRoutes.addEventListener("click", () => routeFileInput.click());
+
+      // 読み込み可能ファイル形式の解説ボタン（「？」）のイベント設定
+      if (btnImportHelp) {
+        btnImportHelp.addEventListener("click", () => {
+          alert(
+            "【読み込み可能なファイル形式】\n\n" +
+              "1. JSON形式 (.json)\n" +
+              "2. GPX形式 (.gpx)\n",
+          );
+        });
+      }
+
+      // GPXパース用関数
+      function parseGPX(gpxText) {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(gpxText, "text/xml");
+        const routesObj = {};
+
+        const trks = xmlDoc.getElementsByTagName("trk");
+        if (trks.length > 0) {
+          for (let i = 0; i < trks.length; i++) {
+            const trk = trks[i];
+            const nameNode = trk.getElementsByTagName("name")[0];
+            let name = nameNode
+              ? nameNode.textContent.trim()
+              : `gpx_track_${i + 1}`;
+            const pts = [];
+            const trkpts = trk.getElementsByTagName("trkpt");
+            for (let j = 0; j < trkpts.length; j++) {
+              const lat = parseFloat(trkpts[j].getAttribute("lat"));
+              const lon = parseFloat(trkpts[j].getAttribute("lon"));
+              if (!isNaN(lat) && !isNaN(lon)) {
+                pts.push([lat, lon]);
+              }
+            }
+            if (pts.length >= 2) {
+              routesObj[name] = pts;
+            }
+          }
+        } else {
+          const rtepts = xmlDoc.getElementsByTagName("rtept");
+          const wpts = xmlDoc.getElementsByTagName("wpt");
+          const pts = [];
+          const nodeArray = rtepts.length > 0 ? rtepts : wpts;
+          for (let j = 0; j < nodeArray.length; j++) {
+            const lat = parseFloat(nodeArray[j].getAttribute("lat"));
+            const lon = parseFloat(nodeArray[j].getAttribute("lon"));
+            if (!isNaN(lat) && !isNaN(lon)) {
+              pts.push([lat, lon]);
+            }
+          }
+          if (pts.length >= 2) {
+            routesObj["gpx_imported_route"] = pts;
+          }
+        }
+        return routesObj;
+      }
+
+      // JSON/GPXファイル両対応の読み込み処理
+      routeFileInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const fileName = file.name.toLowerCase();
+        const reader = new FileReader();
+        reader.onload = function (evt) {
+          try {
+            let importedRoutes = {};
+            if (fileName.endsWith(".gpx")) {
+              importedRoutes = parseGPX(evt.target.result);
+              if (Object.keys(importedRoutes).length === 0) {
+                throw new Error(
+                  "GPX内に有効なルート情報が見つかりませんでした。",
+                );
+              }
+            } else {
+              importedRoutes = JSON.parse(evt.target.result);
+              if (typeof importedRoutes !== "object" || importedRoutes === null)
+                throw new Error();
+            }
+            let routesObj = JSON.parse(
+              localStorage.getItem(STORAGE_KEY) || "{}",
+            );
+            Object.assign(routesObj, importedRoutes);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
+            updateRouteSelectOptions();
+            alert("さんぽみちデータをファイルからよみこみました！");
+          } catch (err) {
+            alert(
+              "ファイルの読み込みに失敗しました: " +
+                (err.message || "形式を確認してください。"),
+            );
+          }
+        };
+        reader.readAsText(file);
+        e.target.value = "";
+      });
+    </script>
+  </body>
+</html>
