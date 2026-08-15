@@ -1394,18 +1394,18 @@
         typeof json__0 !== "undefined" ? json__0 : null,
         {
           style: function (feature) {
-            const Z12 = feature.properties && feature.properties.Z12;
+            const DistName = feature.properties && feature.properties.DistName;
             let fillColor = null;
 
-            if (Z12 === "第１種風致地区") {
+            if (DistName === "第１種風致地区") {
               fillColor = "pink";
-            } else if (Z12 === "第２種風致地区") {
+            } else if (DistName === "第２種風致地区") {
               fillColor = "skyblue";
-            } else if (Z12 === "第３種風致地区") {
+            } else if (DistName === "第３種風致地区") {
               fillColor = "yellow";
-            } else if (Z12 === "第４種風致地区") {
+            } else if (DistName === "第４種風致地区") {
               fillColor = "green";
-            } else if (Z12 === "第５種風致地区") {
+            } else if (DistName === "第５種風致地区") {
               fillColor = "orange";
             }
 
@@ -1434,13 +1434,13 @@
 
       // 年代別写真をベースレイヤー（ラジオボタン）として定義
       const baseLayers = {
-        "古都保存法･風致地区（歴風赤枠 歴風特別赤ﾊｯﾁ 1桃 2青 3黄 4緑 5橙 ）":
-          zoneLayerGroup, // ← ここを変数に置き換え
+        "古都保存法･風致地区（1桃 2青 3黄 4緑 5橙）": zoneLayerGroup, // ← ここを変数に置き換え
         "昭和59年～昭和61年（1984年～1986年）": L.tileLayer(
           "https://cyberjapandata.gsi.go.jp/xyz/gazo3/{z}/{x}/{y}.jpg",
           {
             minZoom: 10,
-            maxZoom: 17,
+            maxZoom: 21,
+            maxNativeZoom: 17,
             attribution:
               '© <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a>',
           },
@@ -1449,7 +1449,8 @@
           "https://cyberjapandata.gsi.go.jp/xyz/gazo2/{z}/{x}/{y}.jpg",
           {
             minZoom: 10,
-            maxZoom: 17,
+            maxZoom: 21,
+            maxNativeZoom: 17,
             attribution:
               '© <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a>',
           },
@@ -1458,7 +1459,8 @@
           "https://cyberjapandata.gsi.go.jp/xyz/gazo1/{z}/{x}/{y}.jpg",
           {
             minZoom: 10,
-            maxZoom: 17,
+            maxZoom: 21,
+            maxNativeZoom: 17,
             attribution:
               '© <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a>',
           },
@@ -1467,7 +1469,8 @@
           "https://cyberjapandata.gsi.go.jp/xyz/ort_old10/{z}/{x}/{y}.png",
           {
             minZoom: 10,
-            maxZoom: 17,
+            maxZoom: 21,
+            maxNativeZoom: 17,
             attribution:
               '© <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a>',
           },
