@@ -1,4 +1,4 @@
-var json__1 = {
+var json_ancientcapital_zone = {
   "type": "FeatureCollection",
   "crs": {
     "type": "name",

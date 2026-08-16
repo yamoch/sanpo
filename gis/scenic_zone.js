@@ -1,4 +1,4 @@
-var json__0 = {
+var json_scenic_zone = {
 "type": "FeatureCollection",
 "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::6668" } },
 "features": [

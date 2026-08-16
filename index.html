@@ -852,10 +852,12 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- gis/scenic_zone.js の読み込み -->
+    <!-- 風致地区データの読み込み -->
     <script src="gis/scenic_zone.js"></script>
-    <!-- gis/ancientcapital_zone.js の読み込み -->
+    <!-- 古都保存法データの読み込み -->
     <script src="gis/ancientcapital_zone.js"></script>
+    <!-- 用途地域データの読み込み -->
+    <script src="gis/use_district.js"></script>
 
     <script>
       let map;
@@ -1362,7 +1364,9 @@
       ).addTo(map);
       // ▼▼ 歴史的風土保存区域・特別保存地区のレイヤーを定義 ▼▼
       const ancientCapitalZoneLayer = L.geoJSON(
-        typeof json__1 !== "undefined" ? json__1 : null,
+        typeof json_ancientcapital_zone !== "undefined"
+          ? json_ancientcapital_zone
+          : null,
         {
           style: function (feature) {
             const distType = feature.properties && feature.properties.DistType; //[cite: 1]
@@ -1391,7 +1395,7 @@
 
       // ▼▼ 風致地区のレイヤーを変数として定義 ▼▼
       const scenicZoneLayer = L.geoJSON(
-        typeof json__0 !== "undefined" ? json__0 : null,
+        typeof json_scenic_zone !== "undefined" ? json_scenic_zone : null,
         {
           style: function (feature) {
             const DistName = feature.properties && feature.properties.DistName;
@@ -1404,7 +1408,7 @@
             } else if (DistName === "第３種風致地区") {
               fillColor = "yellow";
             } else if (DistName === "第４種風致地区") {
-              fillColor = "green";
+              fillColor = "lightgreen";
             } else if (DistName === "第５種風致地区") {
               fillColor = "orange";
             }
@@ -1432,9 +1436,55 @@
         ancientCapitalZoneLayer.bringToFront();
       });
 
+      // ▼▼ 用途地域のレイヤーを変数として定義 ▼▼
+      const useDistrictLayer = L.geoJSON(
+        typeof json_use_district !== "undefined" ? json_use_district : null,
+        {
+          style: function (feature) {
+            const YoutoName =
+              feature.properties && feature.properties.YoutoName;
+            let fillColor = null;
+
+            if (YoutoName === "第１種低層住居専用地域") {
+              fillColor = "darkgreen";
+            } else if (YoutoName === "第２種低層住居専用地域") {
+              fillColor = "forestgreen";
+            } else if (YoutoName === "第１種中高層住居専用地域") {
+              fillColor = "lawngreen";
+            } else if (YoutoName === "第２種中高層住居専用地域") {
+              fillColor = "greenyellow";
+            } else if (YoutoName === "第１種住居地域") {
+              fillColor = "yellow";
+            } else if (YoutoName === "第２種住居地域") {
+              fillColor = "orange";
+            } else if (YoutoName === "準住居地域") {
+              fillColor = "chocolate";
+            } else if (YoutoName === "近隣商業地域") {
+              fillColor = "pink";
+            } else if (YoutoName === "商業地域") {
+              fillColor = "deeppink";
+            } else if (YoutoName === "準工業地域") {
+              fillColor = "plum";
+            } else if (YoutoName === "工業地域") {
+              fillColor = "skyblue";
+            } else if (YoutoName === "工業専用地域") {
+              fillColor = "mediumblue"; // 青色
+            }
+
+            if (fillColor) {
+              return {
+                stroke: false, // 境界線なし
+                fillColor: fillColor,
+                fillOpacity: 0.4,
+              };
+            }
+            return {};
+          },
+        },
+      );
+
       // 年代別写真をベースレイヤー（ラジオボタン）として定義
       const baseLayers = {
-        "古都保存法･風致地区（1桃 2青 3黄 4緑 5橙）": zoneLayerGroup, // ← ここを変数に置き換え
         "昭和59年～昭和61年（1984年～1986年）": L.tileLayer(
           "https://cyberjapandata.gsi.go.jp/xyz/gazo3/{z}/{x}/{y}.jpg",
           {
@@ -1475,6 +1525,9 @@
               '© <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a>',
           },
         ),
+        "用途地域（1低/濃緑 2低/緑 1中高/黄緑 2中高/薄黄緑 1住/黄 2住/橙 準住/茶 近商/ﾋﾟﾝｸ 商/濃ﾋﾟﾝｸ 準工/薄紫 工/青）":
+          useDistrictLayer,
+        "古都保存法･風致地区（1桃 2青 3黄 4緑 5橙）": zoneLayerGroup,
       };
 
       // レイヤーコントロールを右下（現在地記号の上）に配置するため、RecenterControlより先に追加
@@ -1521,6 +1574,9 @@
             // 変更：グループレイヤーを削除する判定に変更
             if (map.hasLayer(zoneLayerGroup)) {
               map.removeLayer(zoneLayerGroup);
+            }
+            if (map.hasLayer(useDistrictLayer)) {
+              map.removeLayer(useDistrictLayer);
             }
             e.preventDefault();
           } else {
@@ -1571,6 +1627,9 @@
               layer.setStyle({ fillOpacity: opacity });
             }
           });
+        }
+        if (map.hasLayer(useDistrictLayer)) {
+          useDistrictLayer.setStyle({ fillOpacity: opacity });
         }
       });
 
