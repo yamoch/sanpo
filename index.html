@@ -3178,6 +3178,21 @@
         reader.readAsText(file);
         e.target.value = "";
       });
+      csvFileInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (evt) {
+          try {
+            parseCSVData(evt.target.result);
+            alert("スポットデータをCSVからよみこみました！");
+          } catch (err) {
+            alert("CSVの読み込みに失敗しました。");
+          }
+        };
+        reader.readAsText(file);
+        e.target.value = "";
+      });
     </script>
   </body>
 </html>
