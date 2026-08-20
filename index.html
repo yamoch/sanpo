@@ -20,6 +20,13 @@
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     />
+
+    <!-- Firebase SDK (Compat版) の読み込み -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <!-- ▼▼ Auth SDKを追加 ▼▼ -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+
     <style>
       body {
         margin: 0;
@@ -190,6 +197,92 @@
         font-size: 12px;
         margin-bottom: 8px;
         outline: none;
+      }
+
+      /* --- ログインパネルのスタイル --- */
+      .login-panel {
+        display: none;
+        position: absolute;
+        top: 60px;
+        right: 10px;
+        z-index: 1001;
+        background: white;
+        padding: 16px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        font-family: sans-serif;
+        font-size: 14px;
+        width: 300px;
+        box-sizing: border-box;
+      }
+      .login-panel.active {
+        display: block;
+      }
+      .login-panel h3 {
+        margin: 0 0 12px 0;
+        font-size: 16px;
+        color: #333;
+      }
+      .login-panel input {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+        font-size: 12px;
+      }
+      .login-panel button {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 8px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: bold;
+      }
+      .login-panel button:hover:not(:disabled) {
+        background: #0056b3;
+      }
+      .login-panel button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+      .login-panel button.logout-btn {
+        background: #dc3545;
+        margin-top: 8px;
+      }
+      .login-panel button.logout-btn:hover {
+        background: #c82333;
+      }
+      .login-status {
+        padding: 8px;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        font-size: 12px;
+        background: #e8f5e9;
+        color: #2e7d32;
+        text-align: center;
+      }
+      .login-status.error {
+        background: #ffebee;
+        color: #c62828;
+      }
+      .login-status.logged-in {
+        background: #c8e6c9;
+        color: #1b5e20;
+      }
+      .user-info {
+        font-size: 11px;
+        color: #666;
+        margin-top: 8px;
+        padding: 8px;
+        background: #f5f5f5;
+        border-radius: 4px;
+        word-break: break-all;
       }
 
       .leaflet-control-zoom a {
@@ -436,6 +529,84 @@
     </style>
   </head>
   <body>
+    <!-- ログイン用モーダル -->
+    <div
+      id="auth-modal"
+      style="
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100dvh;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+      "
+    >
+      <div
+        style="
+          background: white;
+          padding: 20px;
+          border-radius: 8px;
+          width: 280px;
+          font-family: sans-serif;
+        "
+      >
+        <h3 style="margin-top: 0">保存にはログインが必要です</h3>
+        <input
+          type="email"
+          id="auth-email"
+          placeholder="メールアドレス"
+          style="
+            width: 100%;
+            margin-bottom: 8px;
+            padding: 6px;
+            box-sizing: border-box;
+          "
+        />
+        <input
+          type="password"
+          id="auth-password"
+          placeholder="パスワード"
+          style="
+            width: 100%;
+            margin-bottom: 12px;
+            padding: 6px;
+            box-sizing: border-box;
+          "
+        />
+        <div style="display: flex; gap: 8px">
+          <button
+            id="btn-auth-login"
+            style="
+              flex: 1;
+              padding: 8px;
+              background: #007bff;
+              color: white;
+              border: none;
+              border-radius: 4px;
+            "
+          >
+            ログイン
+          </button>
+          <button
+            id="btn-auth-cancel"
+            style="
+              flex: 1;
+              padding: 8px;
+              background: #ccc;
+              border: none;
+              border-radius: 4px;
+            "
+          >
+            キャンセル
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ハッチング用のSVGパターン定義 -->
     <svg width="0" height="0" style="position: absolute; z-index: -1">
       <defs>
@@ -860,6 +1031,93 @@
     <script src="gis/use_district.js"></script>
 
     <script>
+      // ▼▼ Firebase設定（取得したAPI情報をここに入力してください） ▼▼
+      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+      const firebaseConfig = {
+        apiKey: "AIzaSyCsk7odQ-QdN78Kiy3j4jtK3BK1Fk5Rouw",
+        authDomain: "sanpo-9d19c.firebaseapp.com",
+        projectId: "sanpo-9d19c",
+        storageBucket: "sanpo-9d19c.firebasestorage.app",
+        messagingSenderId: "215332498946",
+        appId: "1:215332498946:web:24b7f77f2132754fee811b",
+        measurementId: "G-TBFFWN51WP",
+      };
+
+      // Firebaseの初期化
+      if (typeof firebase !== "undefined" && !firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      const db =
+        typeof firebase !== "undefined" && firebase.firestore
+          ? firebase.firestore()
+          : null;
+      // ▼▼ Authオブジェクトの取得 ▼▼
+      const auth =
+        typeof firebase !== "undefined" && firebase.auth
+          ? firebase.auth()
+          : null;
+
+      // Firebaseのログイン状態が確定するまで待つ
+      const authReady = auth
+        ? new Promise((resolve) => {
+            auth.onAuthStateChanged((user) => resolve(user));
+          })
+        : Promise.resolve(null);
+
+      const LOGIN_COMPLETED_KEY = "sanpo_login_completed_v1";
+
+      // ログインを保証して処理を実行するヘルパー関数
+      function ensureAuthenticated(onSuccess) {
+        if (!auth) return;
+
+        // Firebaseのログイン状態が確定してから判定する
+        authReady.then(() => {
+          // authReadyは初回の認証状態を通知するPromiseなので、
+          // その後の最新のログイン状態はauth.currentUserで確認する。
+          const currentUser = auth.currentUser;
+          if (currentUser && localStorage.getItem(LOGIN_COMPLETED_KEY) === "1") {
+            onSuccess(currentUser);
+            return;
+          }
+
+          // 未ログインの場合のみログインモーダルを表示
+          const modal = document.getElementById("auth-modal");
+          modal.style.display = "flex";
+
+          const btnLogin = document.getElementById("btn-auth-login");
+          const btnCancel = document.getElementById("btn-auth-cancel");
+
+          const cleanup = () => {
+            modal.style.display = "none";
+            btnLogin.onclick = null;
+            btnCancel.onclick = null;
+          };
+
+          btnCancel.onclick = () => {
+            cleanup();
+            alert(
+              "ログインがキャンセルされたため、Firebaseへの保存は行われませんでした。",
+            );
+          };
+
+          btnLogin.onclick = () => {
+            const email = document.getElementById("auth-email").value;
+            const password = document.getElementById("auth-password").value;
+
+            auth
+              .signInWithEmailAndPassword(email, password)
+              .then((userCredential) => {
+                localStorage.setItem(LOGIN_COMPLETED_KEY, "1");
+                cleanup();
+                onSuccess(userCredential.user);
+              })
+              .catch((error) => {
+                alert("ログイン失敗: " + error.message);
+              });
+          };
+        });
+      }
+
       let map;
       let spotMarkers = [];
       let spots = [];
@@ -1251,6 +1509,47 @@
       document.addEventListener("DOMContentLoaded", () => {
         updateRouteSelectOptions();
         loadCSV();
+
+        // 起動時は、アプリ側で初回ログイン完了済みでなければログイン画面を表示し、
+        // ログインボタンの処理もここで登録する。
+        if (auth && localStorage.getItem(LOGIN_COMPLETED_KEY) !== "1") {
+          const modal = document.getElementById("auth-modal");
+          const btnLogin = document.getElementById("btn-auth-login");
+          const btnCancel = document.getElementById("btn-auth-cancel");
+
+          modal.style.display = "flex";
+
+          btnLogin.onclick = () => {
+            const email = document.getElementById("auth-email").value.trim();
+            const password = document.getElementById("auth-password").value;
+
+            if (!email || !password) {
+              alert("メールアドレスとパスワードを入力してください。");
+              return;
+            }
+
+            btnLogin.disabled = true;
+            auth
+              .signInWithEmailAndPassword(email, password)
+              .then((userCredential) => {
+                localStorage.setItem(LOGIN_COMPLETED_KEY, "1");
+                modal.style.display = "none";
+                btnLogin.disabled = false;
+              })
+              .catch((error) => {
+                btnLogin.disabled = false;
+                alert("ログイン失敗: " + error.message);
+              });
+          };
+
+          btnCancel.onclick = () => {
+            modal.style.display = "none";
+          };
+
+          document.getElementById("auth-password").addEventListener("keydown", (e) => {
+            if (e.key === "Enter") btnLogin.click();
+          });
+        }
       });
 
       function formatDistance(meters) {
@@ -1362,38 +1661,36 @@
             '© <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a>',
         },
       ).addTo(map);
-      // ▼▼ 歴史的風土保存区域・特別保存地区のレイヤーを定義 ▼▼
+
+      // 歴史的風土保存区域・特別保存地区のレイヤーを定義
       const ancientCapitalZoneLayer = L.geoJSON(
         typeof json_ancientcapital_zone !== "undefined"
           ? json_ancientcapital_zone
           : null,
         {
           style: function (feature) {
-            const distType = feature.properties && feature.properties.DistType; //[cite: 1]
+            const distType = feature.properties && feature.properties.DistType;
 
             if (distType === "歴史的風土保存区域") {
-              // 境界線を赤枠とし、塗りつぶしはなし[cite: 1]
               return {
                 color: "red",
                 weight: 2,
                 fill: false,
               };
             } else if (distType === "歴史的風土特別保存地区") {
-              // 境界線を赤枠とし、塗りつぶし部分に赤色のハッチング[cite: 1]
               return {
                 color: "red",
                 weight: 2,
-                fillColor: "url(#redHatch)", // 先ほど定義したSVGパターンを指定
+                fillColor: "url(#redHatch)",
                 fillOpacity: 0.8,
               };
             }
-            // それ以外は変更しない[cite: 1]
             return {};
           },
         },
       );
 
-      // ▼▼ 風致地区のレイヤーを変数として定義 ▼▼
+      // 風致地区のレイヤーを変数として定義
       const scenicZoneLayer = L.geoJSON(
         typeof json_scenic_zone !== "undefined" ? json_scenic_zone : null,
         {
@@ -1425,7 +1722,7 @@
         },
       );
 
-      // 2つのGeoJSONレイヤーを「同じレイヤー」としてグループ化する[cite: 1]
+      // 2つのGeoJSONレイヤーを「同じレイヤー」としてグループ化する
       const zoneLayerGroup = L.layerGroup([
         scenicZoneLayer,
         ancientCapitalZoneLayer,
@@ -1436,7 +1733,7 @@
         ancientCapitalZoneLayer.bringToFront();
       });
 
-      // ▼▼ 用途地域のレイヤーを変数として定義 ▼▼
+      // 用途地域のレイヤーを変数として定義
       const useDistrictLayer = L.geoJSON(
         typeof json_use_district !== "undefined" ? json_use_district : null,
         {
@@ -1468,12 +1765,12 @@
             } else if (YoutoName === "工業地域") {
               fillColor = "skyblue";
             } else if (YoutoName === "工業専用地域") {
-              fillColor = "mediumblue"; // 青色
+              fillColor = "mediumblue";
             }
 
             if (fillColor) {
               return {
-                stroke: false, // 境界線なし
+                stroke: false,
                 fillColor: fillColor,
                 fillOpacity: 0.4,
               };
@@ -1530,7 +1827,7 @@
         "古都保存法･風致地区（1桃 2青 3黄 4緑 5橙）": zoneLayerGroup,
       };
 
-      // レイヤーコントロールを右下（現在地記号の上）に配置するため、RecenterControlより先に追加
+      // レイヤーコントロールを右下に配置
       const layersControl = L.control
         .layers(baseLayers, null, { position: "bottomright" })
         .addTo(map);
@@ -1558,10 +1855,10 @@
       });
       map.addControl(new RecenterControl());
 
-      // ▼▼ ラジオボタンの再選択で解除できるように修正（イベント伝播を停止） ▼▼
+      // ラジオボタンの再選択で解除できるように修正
       let lastSelectedRadio = null;
       layersControl.getContainer().addEventListener("click", (e) => {
-        e.stopPropagation(); // 地図へのクリックの伝播を防ぐ
+        e.stopPropagation();
         if (e.target.tagName === "INPUT" && e.target.type === "radio") {
           if (lastSelectedRadio === e.target) {
             e.target.checked = false;
@@ -1571,7 +1868,6 @@
                 map.removeLayer(layer);
               }
             });
-            // 変更：グループレイヤーを削除する判定に変更
             if (map.hasLayer(zoneLayerGroup)) {
               map.removeLayer(zoneLayerGroup);
             }
@@ -1584,7 +1880,6 @@
           }
         }
       });
-      // ▲▲ ここまで修正 ▲▲
 
       // 不透明度スライダーをレイヤ選択コントロールのメニュー内に追加
       const opacityDiv = L.DomUtil.create("div", "");
@@ -1608,14 +1903,12 @@
         const opacity = e.target.value / 100;
         valLabel.textContent = e.target.value;
 
-        // タイルレイヤーの不透明度を変更
         map.eachLayer((layer) => {
           if (layer instanceof L.TileLayer && layer !== basePhoto) {
             layer.setOpacity(opacity);
           }
         });
 
-        // ▼▼ 追加：GeoJSON（風致・歴史的風土地区）が表示されている場合は不透明度を変更 ▼▼
         if (map.hasLayer(scenicZoneLayer)) {
           scenicZoneLayer.setStyle({ fillOpacity: opacity });
         }
@@ -1635,7 +1928,6 @@
 
       const layersContainer = layersControl.getContainer();
 
-      // ▼▼ レイヤー記号を再度押すと選択画面を閉じるための処理 ▼▼
       const toggleBtn = layersContainer.querySelector(
         ".leaflet-control-layers-toggle",
       );
@@ -1649,16 +1941,14 @@
               )
             ) {
               layersControl.collapse();
-              e.stopPropagation(); // Leafletの内部展開処理への伝播を防ぐ
+              e.stopPropagation();
               e.preventDefault();
             }
           },
           true,
-        ); // キャプチャフェーズで登録
+        );
       }
-      // ▲▲ ここまで追加 ▲▲
 
-      // ▼▼ 背景タイル選択が開いたときにパネルを一時的に非表示にする処理 ▼▼
       const layersObserver = new MutationObserver(() => {
         const isExpanded = layersContainer.classList.contains(
           "leaflet-control-layers-expanded",
@@ -1675,7 +1965,6 @@
         attributes: true,
         attributeFilter: ["class"],
       });
-      // ▲▲ ここまで追加 ▲▲
 
       // --- さんぽモード下部表示UI更新（トグル機能付き） ---
       function updateOsanpoDistanceUI(dist) {
@@ -1722,7 +2011,6 @@
 
             if (isOsanpoActive) {
               if (isTracking) {
-                // 停止（滞在）中のログ重複防止：前回記録地点から3m以上離れている場合のみ追加
                 let shouldAddLog = true;
                 if (trackedRoute.length > 0) {
                   const lastPt = trackedRoute[trackedRoute.length - 1];
@@ -1790,7 +2078,6 @@
         alert("お使いのブラウザは位置情報きのうに対応していません。");
       }
 
-      // 文頭6桁（年月日）昇順で並び替える処理を追加
       function updateRouteSelectOptions() {
         const select = document.getElementById("route-select");
         const currentVal = select.value;
@@ -1801,7 +2088,6 @@
           const routesObj = JSON.parse(savedData);
           const keys = Object.keys(routesObj);
 
-          // 文頭6桁（YYMMDD）を比較して昇順ソート
           keys.sort((a, b) => {
             const prefixA = a.slice(0, 6);
             const prefixB = b.slice(0, 6);
@@ -1875,7 +2161,6 @@
           trackingCircleMarker = null;
         }
 
-        // 停止時は「きろくちゅう」表示をクリア（非表示）にする
         document.getElementById("osanpo-distance").innerHTML = "";
 
         if (trackedRoute.length >= 2) {
@@ -1890,14 +2175,54 @@
             defaultName,
           );
           if (routeName && routeName.trim() !== "") {
-            routeName = routeName.trim();
-            let routesObj = JSON.parse(
-              localStorage.getItem(STORAGE_KEY) || "{}",
-            );
-            routesObj[routeName] = trackedRoute;
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
-            updateRouteSelectOptions();
-            alert(`「${routeName}」としておもいでに保存しました！`);
+            // 保存前にログイン確認
+            ensureAuthenticated((user) => {
+              routeName = routeName.trim();
+              let routesObj = JSON.parse(
+                localStorage.getItem(STORAGE_KEY) || "{}",
+              );
+              routesObj[routeName] = trackedRoute;
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
+              updateRouteSelectOptions();
+
+              // Firebase Firestoreへの保存処理
+              if (!db) {
+                alert("Firebaseに接続できないため、保存できませんでした。");
+                return;
+              }
+
+              const currentUser = auth && auth.currentUser ? auth.currentUser : user;
+              if (!currentUser) {
+                alert("Firebaseにログインできていないため、保存できませんでした。");
+                return;
+              }
+
+              const distanceMeters = calculateArrayDistance(trackedRoute);
+
+              // 二重配列 [[lat, lng], ...] を オブジェクト配列 [{lat, lng}, ...] に変換
+              const formattedRoute = trackedRoute.map((pt) => ({
+                lat: pt[0],
+                lng: pt[1],
+              }));
+
+              db.collection("sanpo_records")
+                .doc(routeName)
+                .set({
+                  name: routeName,
+                  route: formattedRoute,
+                  createdAt: new Date().toISOString(),
+                  distance: distanceMeters,
+                  uid: currentUser.uid,
+                })
+                .then(() => {
+                  console.log("Firebaseに散歩記録を保存しました。", currentUser.uid);
+                  alert(`「${routeName}」としておもいでに保存しました！`);
+                })
+                .catch((error) => {
+                  console.error("Firebaseへの保存に失敗しました:", error);
+                  alert("Firebaseへの保存に失敗しました。\n" + error.code + "\n" + error.message);
+                });
+            });
           }
         } else {
           alert("移動距離が短すぎるため、記録されませんでした。");
@@ -2536,6 +2861,24 @@
         btn.addEventListener("click", () => btn.classList.toggle("active"));
       });
 
+      function loadSelectedRoute() {
+        const selectedName = routeSelect.value;
+        if (!selectedName) return;
+        let routesObj = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+        const pts = routesObj[selectedName];
+        if (pts && pts.length > 0) {
+          resetOmoideRoute();
+          routeSelect.value = selectedName;
+          pts.forEach((pt) => {
+            addRouteMarker(pt[0], pt[1]);
+          });
+          if (routePoints.length > 0) {
+            const bounds = L.latLngBounds(routePoints);
+            map.fitBounds(bounds, { padding: [50, 50] });
+          }
+        }
+      }
+
       routeSelect.addEventListener("change", () => {
         const hasSelected = Boolean(routeSelect.value);
         if (!isDrawMode) {
@@ -2617,7 +2960,6 @@
               distInfoElem.style.display = "block";
               progressTextElem.innerHTML = `<b> ${formatDistance(currentDist)} / ${formatDistance(totalDist)} (${progressPercent}%)</b>`;
 
-              // 高度の表示
               let altValStr = "-- m";
               if (currentElevationData && currentElevationData.length > 0) {
                 let closest = currentElevationData[0];
@@ -2655,7 +2997,6 @@
                 ? "へんしゅうする"
                 : "さんぽみちをつくる";
 
-              // 再生終了時に各種ボタンの操作を有効化
               btnStartTour.disabled = false;
               btnDrawMode.disabled = false;
               if (btnSaveRoute) btnSaveRoute.disabled = false;
@@ -2680,14 +3021,12 @@
         editStoragePanel.style.display = "none";
         updateRouteAndDisplay();
 
-        // 散歩スタート時に詳細設定を閉じる
         const detailsElem = document.getElementById("details-advanced");
         if (detailsElem) detailsElem.open = false;
 
         btnDrawMode.classList.remove("active");
         btnStartTour.disabled = true;
 
-        // 散歩中は「さんぽみちをつくる（へんしゅうする）」と「さんぽスタート」、「プルダウン」を非表示
         btnDrawMode.style.display = "none";
         btnStartTour.style.display = "none";
         document.getElementById("route-select-container").style.display =
@@ -2730,7 +3069,6 @@
         btnPauseTour.style.display = "none";
         btnStopTour.style.display = "none";
 
-        // 非表示のボタンとプルダウンを復元
         btnDrawMode.style.display = "inline-block";
         btnStartTour.style.display = "inline-block";
         document.getElementById("route-select-container").style.display =
@@ -2758,441 +3096,264 @@
       if (btnSaveRoute) {
         btnSaveRoute.addEventListener("click", () => {
           if (routePoints.length < 2) return;
-          let date = new Date();
-          let yy = String(date.getFullYear()).slice(-2);
-          let mm = String(date.getMonth() + 1).padStart(2, "0");
-          let dd = String(date.getDate()).padStart(2, "0");
-          let defaultName = `${yy}${mm}${dd}_さんぽ`;
+          
+          // ログイン確認とFirebase保存
+          ensureAuthenticated((user) => {
+            let date = new Date();
+            let yy = String(date.getFullYear()).slice(-2);
+            let mm = String(date.getMonth() + 1).padStart(2, "0");
+            let dd = String(date.getDate()).padStart(2, "0");
+            let defaultName = `${yy}${mm}${dd}_さんぽ`;
 
-          let routeName = prompt(
-            "ほぞんするさんぽみちのなまえをにゅうりょくしてください:",
-            defaultName,
-          );
-          if (!routeName || routeName.trim() === "") return;
-          let routesObj = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-          routesObj[routeName.trim()] = routePoints;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
-          updateRouteSelectOptions();
-          document.getElementById("route-select").value = routeName.trim();
-          if (!isDrawMode) {
-            btnDrawMode.innerText = "へんしゅうする";
-          }
-          updateStorageButtonsState();
-          alert(`さんぽみち「${routeName.trim()}」をほぞんしました！`);
+            let routeName = prompt("さんぽみちのなまえをいれてね", defaultName);
+            if (routeName && routeName.trim() !== "") {
+              routeName = routeName.trim();
+              let routesObj = JSON.parse(
+                localStorage.getItem(STORAGE_KEY) || "{}",
+              );
+              routesObj[routeName] = routePoints;
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
+              updateRouteSelectOptions();
+              routeSelect.value = routeName;
+
+              if (!db) {
+                alert("Firebaseに接続できないため、保存できませんでした。");
+                return;
+              }
+
+              const currentUser = auth && auth.currentUser ? auth.currentUser : user;
+              if (!currentUser) {
+                alert("Firebaseにログインできていないため、保存できませんでした。");
+                return;
+              }
+
+              const formattedRoute = routePoints.map((pt) => ({
+                lat: pt[0],
+                lng: pt[1],
+              }));
+              db.collection("sanpo_records")
+                .doc(routeName)
+                .set({
+                  name: routeName,
+                  route: formattedRoute,
+                  createdAt: new Date().toISOString(),
+                  distance: calculateTotalRouteDistance(),
+                  uid: currentUser.uid,
+                })
+                .then(() => {
+                  alert(`「${routeName}」をほぞんしました！`);
+                  updateStorageButtonsState();
+                })
+                .catch((err) => {
+                  console.error("Firebase保存エラー:", err);
+                  alert("Firebaseへの保存に失敗しました。\n" + err.code + "\n" + err.message);
+                });
+              updateStorageButtonsState();
+            }
+          });
         });
       }
 
       if (btnOverwriteRoute) {
         btnOverwriteRoute.addEventListener("click", () => {
-          const routeName = routeSelect.value;
-          if (!routeName) {
-            alert(
-              "うわがきほぞんするさんぽみちをプルダウンからえらんでください。",
-            );
-            return;
+          const selectedName = routeSelect.value;
+          if (!selectedName || routePoints.length < 2) return;
+          if (confirm(`「${selectedName}」をうわがきほぞんしますか？`)) {
+            // ログイン確認とFirebase保存
+            ensureAuthenticated((user) => {
+              let routesObj = JSON.parse(
+                localStorage.getItem(STORAGE_KEY) || "{}",
+              );
+              routesObj[selectedName] = routePoints;
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
+
+              if (db) {
+                const formattedRoute = routePoints.map((pt) => ({
+                  lat: pt[0],
+                  lng: pt[1],
+                }));
+                db.collection("sanpo_records")
+                  .doc(selectedName)
+                  .set({
+                    name: selectedName,
+                    route: formattedRoute,
+                    updatedAt: new Date().toISOString(),
+                    distance: calculateTotalRouteDistance(),
+                  })
+                  .catch((err) => console.error("Firebase保存エラー:", err));
+              }
+
+              alert(`「${selectedName}」をうわがきほぞんしました！`);
+            });
           }
-          if (routePoints.length < 2) return;
-          if (
-            !confirm(
-              `えらんでいるさんぽみち「${routeName}」をうわがきほぞんしてもよろしいですか？`,
-            )
-          )
-            return;
-          let routesObj = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-          routesObj[routeName] = routePoints;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
-          alert(`さんぽみち「${routeName}」をうわがきほぞんしました！`);
         });
       }
 
       if (btnRenameRoute) {
         btnRenameRoute.addEventListener("click", () => {
-          const oldName = routeSelect.value;
-          if (!oldName) {
-            alert("なまえをかえるさんぽみちをプルダウンからえらんでください。");
-            return;
-          }
-          let newName = prompt(
-            "あたらしいさんぽみちのなまえをにゅうりょくしてください:",
-            oldName,
-          );
-          if (!newName || newName.trim() === "" || newName.trim() === oldName)
-            return;
-          try {
-            let routesObj = JSON.parse(
-              localStorage.getItem(STORAGE_KEY) || "{}",
-            );
-            if (
-              routesObj[newName.trim()] &&
-              !confirm(
-                `「${newName.trim()}」は既に存在します。上書きしますか？`,
-              )
-            )
-              return;
-            routesObj[newName.trim()] = routesObj[oldName];
-            delete routesObj[oldName];
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
-            updateRouteSelectOptions();
-            routeSelect.value = newName.trim();
-            updateStorageButtonsState();
-            alert(`さんぽみちのなまえを「${newName.trim()}」にかえました！`);
-          } catch (e) {
-            alert("名称変更に失敗しました。");
+          const selectedName = routeSelect.value;
+          if (!selectedName) return;
+          let newName = prompt("あたらしいなまえをいれてね", selectedName);
+          if (newName && newName.trim() !== "" && newName !== selectedName) {
+            // ログイン確認とFirebase更新
+            ensureAuthenticated((user) => {
+              newName = newName.trim();
+              let routesObj = JSON.parse(
+                localStorage.getItem(STORAGE_KEY) || "{}",
+              );
+              routesObj[newName] = routesObj[selectedName];
+              delete routesObj[selectedName];
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
+
+              if (db) {
+                db.collection("sanpo_records")
+                  .doc(selectedName)
+                  .get()
+                  .then((doc) => {
+                    if (doc.exists) {
+                      const data = doc.data();
+                      data.name = newName;
+                      db.collection("sanpo_records").doc(newName).set(data);
+                      db.collection("sanpo_records").doc(selectedName).delete();
+                    }
+                  })
+                  .catch((err) => console.error("Firebase更新エラー:", err));
+              }
+
+              updateRouteSelectOptions();
+              routeSelect.value = newName;
+              alert(`「${selectedName}」を「${newName}」にへんこうしました！`);
+            });
           }
         });
-      }
-
-      function loadSelectedRoute() {
-        const routeName = document.getElementById("route-select").value;
-        if (!routeName) return;
-        try {
-          const routesObj = JSON.parse(
-            localStorage.getItem(STORAGE_KEY) || "{}",
-          );
-          const points = routesObj[routeName];
-          if (!Array.isArray(points) || points.length < 2) return;
-          if (routePolyline) {
-            map.removeLayer(routePolyline);
-            routePolyline = null;
-          }
-          routeMarkers.forEach((item) => map.removeLayer(item.marker));
-          routeMarkers = [];
-
-          isDrawMode = false;
-          editStoragePanel.style.display = "none";
-          points.forEach((pt) => addRouteMarker(pt[0], pt[1]));
-          updateRouteAndDisplay();
-        } catch (e) {}
       }
 
       if (btnDeleteSavedRoute) {
         btnDeleteSavedRoute.addEventListener("click", () => {
-          const routeName = document.getElementById("route-select").value;
-          if (!routeName) {
-            alert("さくじょするさんぽみちをプルダウンからえらんでください。");
-            return;
-          }
-          if (
-            !confirm(`さんぽみち「${routeName}」を削除してもよろしいですか？`)
-          )
-            return;
-          try {
-            let routesObj = JSON.parse(
-              localStorage.getItem(STORAGE_KEY) || "{}",
-            );
-            delete routesObj[routeName];
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
-            updateRouteSelectOptions();
-            if (!isDrawMode) {
-              btnDrawMode.innerText = "さんぽみちをつくる";
-            }
-            alert(`さんぽみち「${routeName}」をけしました。`);
-          } catch (e) {}
-        });
-      }
+          const selectedName = routeSelect.value;
+          if (!selectedName) return;
+          if (confirm(`「${selectedName}」をさくじょしますか？`)) {
+            // ログイン確認とFirebase削除
+            ensureAuthenticated((user) => {
+              let routesObj = JSON.parse(
+                localStorage.getItem(STORAGE_KEY) || "{}",
+              );
+              delete routesObj[selectedName];
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
 
-      function downloadFile(content, mimeType, filename) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
+              if (db) {
+                db.collection("sanpo_records")
+                  .doc(selectedName)
+                  .delete()
+                  .catch((err) => console.error("Firebase削除エラー:", err));
+              }
 
-      function escapeXml(unsafe) {
-        return unsafe.replace(/[<>&'"]/g, function (c) {
-          switch (c) {
-            case "<":
-              return "&lt;";
-            case ">":
-              return "&gt;";
-            case "&":
-              return "&amp;";
-            case "'":
-              return "&apos;";
-            case '"':
-              return "&quot;";
+              updateRouteSelectOptions();
+              resetOmoideRoute();
+              alert(`「${selectedName}」をさくじょしました。`);
+            });
           }
         });
       }
 
-      function routesToGPX(routesObj) {
-        let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-        gpx += `<gpx version="1.1" creator="さんぽマップ" xmlns="http://www.topografix.com/GPX/1/1">\n`;
-        for (const name in routesObj) {
-          gpx += `  <trk>\n    <name>${escapeXml(name)}</name>\n    <trkseg>\n`;
-          const points = routesObj[name];
-          for (const pt of points) {
-            gpx += `      <trkpt lat="${pt[0]}" lon="${pt[1]}"></trkpt>\n`;
-          }
-          gpx += `    </trkseg>\n  </trk>\n`;
-        }
-        gpx += `</gpx>`;
-        return gpx;
-      }
-
-      function closeExportMenu() {
-        const existing = document.getElementById("export-menu");
-        if (existing) existing.remove();
-        document.removeEventListener(
-          "click",
-          handleExportMenuOutsideClick,
-          true,
-        );
-      }
-
-      function handleExportMenuOutsideClick(e) {
-        const menu = document.getElementById("export-menu");
-        if (menu && !menu.contains(e.target) && e.target !== btnExportRoutes) {
-          closeExportMenu();
-        }
-      }
-
-      // 保存メニュー（複数選択＆JSON/GPX選択対応）
-      function openExportMenu() {
-        closeExportMenu();
-        const savedData = localStorage.getItem(STORAGE_KEY);
-        let routesObj = {};
-        try {
-          routesObj = JSON.parse(savedData || "{}");
-        } catch (e) {}
-        const routeNames = Object.keys(routesObj);
-        if (routeNames.length === 0) {
-          alert("ほぞんされているさんぽみちがありません。");
-          return;
-        }
-
-        const menu = document.createElement("div");
-        menu.id = "export-menu";
-        menu.className = "export-menu";
-
-        const title = document.createElement("div");
-        title.className = "export-menu-title";
-        title.textContent = "保存するさんぽみちを選ぶ";
-        menu.appendChild(title);
-
-        // フォーマット選択
-        const formatDiv = document.createElement("div");
-        formatDiv.style.marginBottom = "8px";
-        formatDiv.style.fontSize = "11px";
-        formatDiv.innerHTML = `
-          <b>形式:</b>
-          <label style="margin-left: 6px; cursor: pointer;"><input type="radio" name="exp-fmt" value="json" checked> JSON</label>
-          <label style="margin-left: 6px; cursor: pointer;"><input type="radio" name="exp-fmt" value="gpx"> GPX</label>
-        `;
-        menu.appendChild(formatDiv);
-
-        // すべて選択チェックボックス
-        const selectAllDiv = document.createElement("div");
-        selectAllDiv.style.fontSize = "11px";
-        selectAllDiv.style.paddingBottom = "4px";
-        selectAllDiv.style.borderBottom = "1px solid #eee";
-        selectAllDiv.style.marginBottom = "6px";
-        selectAllDiv.innerHTML = `<label style="font-weight: bold; cursor: pointer;"><input type="checkbox" id="chk-export-all" checked> すべて選択</label>`;
-        menu.appendChild(selectAllDiv);
-
-        // ルート一覧リスト
-        const listDiv = document.createElement("div");
-        listDiv.style.maxHeight = "140px";
-        listDiv.style.overflowY = "auto";
-
-        routeNames.forEach((name) => {
-          const item = document.createElement("label");
-          item.style.display = "block";
-          item.style.fontSize = "12px";
-          item.style.padding = "3px 0";
-          item.style.cursor = "pointer";
-          item.innerHTML = `<input type="checkbox" class="chk-export-item" value="${escapeXml(name)}" checked> ${escapeXml(name)}`;
-          listDiv.appendChild(item);
+      if (btnResetRoute) {
+        btnResetRoute.addEventListener("click", () => {
+          resetOmoideRoute();
         });
-        menu.appendChild(listDiv);
+      }
 
-        // 保存ボタン
-        const btnSave = document.createElement("button");
-        btnSave.type = "button";
-        btnSave.style.width = "100%";
-        btnSave.style.marginTop = "8px";
-        btnSave.style.padding = "6px";
-        btnSave.style.background = "#007bff";
-        btnSave.style.color = "white";
-        btnSave.style.border = "none";
-        btnSave.style.borderRadius = "4px";
-        btnSave.style.cursor = "pointer";
-        btnSave.textContent = "保存する";
-        menu.appendChild(btnSave);
-
-        document.body.appendChild(menu);
-
-        const chkAll = document.getElementById("chk-export-all");
-        chkAll.addEventListener("change", (e) => {
-          const items = menu.querySelectorAll(".chk-export-item");
-          items.forEach((chk) => (chk.checked = e.target.checked));
+      if (btnExportRoutes) {
+        btnExportRoutes.addEventListener("click", () => {
+          const savedData = localStorage.getItem(STORAGE_KEY) || "{}";
+          const blob = new Blob([savedData], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "sanpo_routes.json";
+          a.click();
+          URL.revokeObjectURL(url);
         });
+      }
 
-        btnSave.addEventListener("click", () => {
-          const selectedChks = menu.querySelectorAll(
-            ".chk-export-item:checked",
-          );
-          if (selectedChks.length === 0) {
-            alert("保存するさんぽみちを1つ以上選んでください。");
-            return;
-          }
-          const fmt = menu.querySelector('input[name="exp-fmt"]:checked').value;
-          const selectedObj = {};
-          selectedChks.forEach((chk) => {
-            const key = chk.value;
-            if (routesObj[key]) selectedObj[key] = routesObj[key];
+      if (btnImportRoutes) {
+        btnImportRoutes.addEventListener("click", () => {
+          routeFileInput.click();
+        });
+      }
+
+      if (routeFileInput) {
+        routeFileInput.addEventListener("change", (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          
+          // ログイン確認してからインポート処理を実行
+          ensureAuthenticated((user) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              try {
+                const imported = JSON.parse(event.target.result);
+                let currentObj = JSON.parse(
+                  localStorage.getItem(STORAGE_KEY) || "{}",
+                );
+                Object.assign(currentObj, imported);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(currentObj));
+                updateRouteSelectOptions();
+
+                if (db) {
+                  Object.keys(imported).forEach((routeName) => {
+                    const pts = imported[routeName];
+                    const formattedRoute = pts.map((pt) => ({
+                      lat: pt[0],
+                      lng: pt[1],
+                    }));
+                    const distanceMeters = calculateArrayDistance(pts);
+
+                    db.collection("sanpo_records")
+                      .doc(routeName)
+                      .set({
+                        name: routeName,
+                        route: formattedRoute,
+                        updatedAt: new Date().toISOString(),
+                        distance: distanceMeters,
+                      })
+                      .catch((err) =>
+                        console.error("Firebaseインポート保存エラー:", err),
+                      );
+                  });
+                }
+
+                alert("さんぽみちデータを読み込みました！");
+              } catch (err) {
+                alert(
+                  "ファイルの読み込みに失敗しました。正しいJSON形式か確認してください。",
+                );
+              }
+            };
+            reader.readAsText(file);
           });
-
-          if (fmt === "json") {
-            downloadFile(
-              JSON.stringify(selectedObj, null, 2),
-              "application/json",
-              "sanpo_routes.json",
-            );
-          } else {
-            const gpxData = routesToGPX(selectedObj);
-            downloadFile(gpxData, "application/gpx+xml", "sanpo_routes.gpx");
-          }
-          closeExportMenu();
         });
-
-        const rect = btnExportRoutes.getBoundingClientRect();
-        const menuWidth = menu.offsetWidth;
-        let left = rect.left;
-        if (left + menuWidth > window.innerWidth - 8) {
-          left = window.innerWidth - menuWidth - 8;
-        }
-        menu.style.top = `${rect.bottom + 4 + window.scrollY}px`;
-        menu.style.left = `${Math.max(8, left) + window.scrollX}px`;
-
-        setTimeout(() => {
-          document.addEventListener(
-            "click",
-            handleExportMenuOutsideClick,
-            true,
-          );
-        }, 0);
       }
 
-      btnExportRoutes.addEventListener("click", openExportMenu);
+      if (csvFileInput) {
+        csvFileInput.addEventListener("change", (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            parseCSVData(event.target.result);
+            alert("CSVスポットデータを読み込みました！");
+          };
+          reader.readAsText(file);
+        });
+      }
 
-      btnImportRoutes.addEventListener("click", () => routeFileInput.click());
-
-      // 読み込み可能ファイル形式の解説ボタン（「？」）のイベント設定
       if (btnImportHelp) {
         btnImportHelp.addEventListener("click", () => {
           alert(
-            "【読み込み可能なファイル形式】\n\n" +
-              "1. JSON形式 (.json)\n" +
-              "2. GPX形式 (.gpx)\n",
+            "【読み込み可能な形式】\n・JSONファイル (.json): 保存したさんぽみちデータ\n・CSVファイル (.csv): スポット位置情報データ (name, text, text_yomikata, photo, lat, lng)",
           );
         });
       }
-
-      // GPXパース用関数
-      function parseGPX(gpxText) {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(gpxText, "text/xml");
-        const routesObj = {};
-
-        const trks = xmlDoc.getElementsByTagName("trk");
-        if (trks.length > 0) {
-          for (let i = 0; i < trks.length; i++) {
-            const trk = trks[i];
-            const nameNode = trk.getElementsByTagName("name")[0];
-            let name = nameNode
-              ? nameNode.textContent.trim()
-              : `gpx_track_${i + 1}`;
-            const pts = [];
-            const trkpts = trk.getElementsByTagName("trkpt");
-            for (let j = 0; j < trkpts.length; j++) {
-              const lat = parseFloat(trkpts[j].getAttribute("lat"));
-              const lon = parseFloat(trkpts[j].getAttribute("lon"));
-              if (!isNaN(lat) && !isNaN(lon)) {
-                pts.push([lat, lon]);
-              }
-            }
-            if (pts.length >= 2) {
-              routesObj[name] = pts;
-            }
-          }
-        } else {
-          const rtepts = xmlDoc.getElementsByTagName("rtept");
-          const wpts = xmlDoc.getElementsByTagName("wpt");
-          const pts = [];
-          const nodeArray = rtepts.length > 0 ? rtepts : wpts;
-          for (let j = 0; j < nodeArray.length; j++) {
-            const lat = parseFloat(nodeArray[j].getAttribute("lat"));
-            const lon = parseFloat(nodeArray[j].getAttribute("lon"));
-            if (!isNaN(lat) && !isNaN(lon)) {
-              pts.push([lat, lon]);
-            }
-          }
-          if (pts.length >= 2) {
-            routesObj["gpx_imported_route"] = pts;
-          }
-        }
-        return routesObj;
-      }
-
-      // JSON/GPXファイル両対応の読み込み処理
-      routeFileInput.addEventListener("change", (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const fileName = file.name.toLowerCase();
-        const reader = new FileReader();
-        reader.onload = function (evt) {
-          try {
-            let importedRoutes = {};
-            if (fileName.endsWith(".gpx")) {
-              importedRoutes = parseGPX(evt.target.result);
-              if (Object.keys(importedRoutes).length === 0) {
-                throw new Error(
-                  "GPX内に有効なルート情報が見つかりませんでした。",
-                );
-              }
-            } else {
-              importedRoutes = JSON.parse(evt.target.result);
-              if (typeof importedRoutes !== "object" || importedRoutes === null)
-                throw new Error();
-            }
-            let routesObj = JSON.parse(
-              localStorage.getItem(STORAGE_KEY) || "{}",
-            );
-            Object.assign(routesObj, importedRoutes);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(routesObj));
-            updateRouteSelectOptions();
-            alert("さんぽみちデータをファイルからよみこみました！");
-          } catch (err) {
-            alert(
-              "ファイルの読み込みに失敗しました: " +
-                (err.message || "形式を確認してください。"),
-            );
-          }
-        };
-        reader.readAsText(file);
-        e.target.value = "";
-      });
-      csvFileInput.addEventListener("change", (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function (evt) {
-          try {
-            parseCSVData(evt.target.result);
-            alert("スポットデータをCSVからよみこみました！");
-          } catch (err) {
-            alert("CSVの読み込みに失敗しました。");
-          }
-        };
-        reader.readAsText(file);
-        e.target.value = "";
-      });
     </script>
   </body>
 </html>
