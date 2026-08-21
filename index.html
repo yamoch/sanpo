@@ -1552,9 +1552,11 @@
             modal.style.display = "none";
           };
 
-          document.getElementById("auth-password").addEventListener("keydown", (e) => {
-            if (e.key === "Enter") btnLogin.click();
-          });
+          document
+            .getElementById("auth-password")
+            .addEventListener("keydown", (e) => {
+              if (e.key === "Enter") btnLogin.click();
+            });
         });
       });
 
@@ -2219,9 +2221,12 @@
                 return;
               }
 
-              const currentUser = auth && auth.currentUser ? auth.currentUser : user;
+              const currentUser =
+                auth && auth.currentUser ? auth.currentUser : user;
               if (!currentUser) {
-                alert("Firebaseにログインできていないため、保存できませんでした。");
+                alert(
+                  "Firebaseにログインできていないため、保存できませんでした。",
+                );
                 return;
               }
 
@@ -2243,12 +2248,20 @@
                   uid: currentUser.uid,
                 })
                 .then(() => {
-                  console.log("Firebaseに散歩記録を保存しました。", currentUser.uid);
+                  console.log(
+                    "Firebaseに散歩記録を保存しました。",
+                    currentUser.uid,
+                  );
                   alert(`「${routeName}」としておもいでに保存しました！`);
                 })
                 .catch((error) => {
                   console.error("Firebaseへの保存に失敗しました:", error);
-                  alert("Firebaseへの保存に失敗しました。\n" + error.code + "\n" + error.message);
+                  alert(
+                    "Firebaseへの保存に失敗しました。\n" +
+                      error.code +
+                      "\n" +
+                      error.message,
+                  );
                 });
             });
           }
@@ -2898,7 +2911,10 @@
           const currentUser = auth.currentUser;
           if (!currentUser) return;
 
-          const doc = await db.collection("sanpo_records").doc(selectedName).get();
+          const doc = await db
+            .collection("sanpo_records")
+            .doc(selectedName)
+            .get();
           if (!doc.exists) return;
 
           const data = doc.data() || {};
@@ -2914,6 +2930,10 @@
           if (pts.length > 0) {
             resetOmoideRoute();
             routeSelect.value = selectedName;
+            const btnDrawMode = document.getElementById("btn-draw-mode");
+            if (btnDrawMode && !isDrawMode) {
+              btnDrawMode.innerText = "へんしゅうする";
+            }
             pts.forEach((pt) => {
               addRouteMarker(pt[0], pt[1]);
             });
@@ -3144,7 +3164,7 @@
       if (btnSaveRoute) {
         btnSaveRoute.addEventListener("click", () => {
           if (routePoints.length < 2) return;
-          
+
           // ログイン確認とFirebase保存
           ensureAuthenticated((user) => {
             let date = new Date();
@@ -3161,9 +3181,12 @@
                 return;
               }
 
-              const currentUser = auth && auth.currentUser ? auth.currentUser : user;
+              const currentUser =
+                auth && auth.currentUser ? auth.currentUser : user;
               if (!currentUser) {
-                alert("Firebaseにログインできていないため、保存できませんでした。");
+                alert(
+                  "Firebaseにログインできていないため、保存できませんでした。",
+                );
                 return;
               }
 
@@ -3188,7 +3211,12 @@
                 })
                 .catch((err) => {
                   console.error("Firebase保存エラー:", err);
-                  alert("Firebaseへの保存に失敗しました。\n" + err.code + "\n" + err.message);
+                  alert(
+                    "Firebaseへの保存に失敗しました。\n" +
+                      err.code +
+                      "\n" +
+                      err.message,
+                  );
                 });
               updateStorageButtonsState();
             }
@@ -3243,13 +3271,20 @@
                     if (!doc.exists) return;
                     const data = doc.data();
                     data.name = newName;
-                    return db.collection("sanpo_records").doc(newName).set(data);
+                    return db
+                      .collection("sanpo_records")
+                      .doc(newName)
+                      .set(data);
                   })
-                  .then(() => db.collection("sanpo_records").doc(selectedName).delete())
+                  .then(() =>
+                    db.collection("sanpo_records").doc(selectedName).delete(),
+                  )
                   .then(async () => {
                     await updateRouteSelectOptions();
                     routeSelect.value = newName;
-                    alert(`「${selectedName}」を「${newName}」にへんこうしました！`);
+                    alert(
+                      `「${selectedName}」を「${newName}」にへんこうしました！`,
+                    );
                   })
                   .catch((err) => console.error("Firebase更新エラー:", err));
               }
@@ -3310,7 +3345,7 @@
         routeFileInput.addEventListener("change", (e) => {
           const file = e.target.files[0];
           if (!file) return;
-          
+
           // ログイン確認してからインポート処理を実行
           ensureAuthenticated((user) => {
             const reader = new FileReader();
