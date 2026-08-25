@@ -641,9 +641,9 @@
         <div>おもいでモード</div>
         <div class="nav-desc">きろくしたさんぽみちをさいせいする。</div>
       </button>
-      <button id="nav-import-csv" class="nav-btn">
-        <div>（おとなよう）CSV読込</div>
-        <div class="nav-desc">スポットデータをCSVから読み込む</div>
+      <button id="nav-spot" class="nav-btn">
+        <div>（おとなよう）スポット作成モード</div>
+        <div class="nav-desc">スポットの追加・編集・CSV読込</div>
       </button>
     </nav>
 
@@ -1003,14 +1003,78 @@
             accept=".json,.gpx"
             style="display: none"
           />
-          <input
-            type="file"
-            id="csv-file-input"
-            accept=".csv"
-            style="display: none"
-          />
         </div>
       </details>
+    </div>
+
+    <!-- ================= （おとなよう）スポット作成モードパネル ================= -->
+    <div id="panel-spot" class="panel">
+      <h3
+        style="
+          border-bottom: 2px solid #9e9e9e;
+          display: inline-block;
+          margin-bottom: 8px;
+        "
+      >
+        （おとなよう）スポット作成モード
+      </h3>
+
+      <div
+        id="spot-status"
+        style="
+          margin-bottom: 8px;
+          color: #007bff;
+          font-weight: bold;
+          font-size: 12px;
+        "
+      ></div>
+
+      <div class="control-panel" style="margin-top: 0">
+        <button id="btn-add-spot">スポットを追加</button>
+        <button id="btn-edit-spot">スポットを編集</button>
+      </div>
+
+      <div
+        style="
+          margin-top: 10px;
+          padding-top: 10px;
+          border-top: 1px solid #eee;
+          font-size: 12px;
+        "
+      >
+        <div style="font-weight: bold; margin-bottom: 6px">スポットCSV</div>
+        <div class="control-panel" style="margin-top: 0">
+          <button id="btn-import-csv" class="btn-dark-gray">
+            CSVを読み込む
+          </button>
+          <button
+            id="btn-spot-csv-help"
+            style="
+              background: #9a9b9b;
+              color: white;
+              border: none;
+              border-radius: 50%;
+              width: 22px;
+              height: 22px;
+              font-size: 12px;
+              font-weight: bold;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            "
+            title="CSV形式の説明"
+          >
+            ？
+          </button>
+        </div>
+        <input
+          type="file"
+          id="csv-file-input"
+          accept=".csv"
+          style="display: none"
+        />
+      </div>
     </div>
 
     <!-- マップ領域 -->
@@ -1154,6 +1218,8 @@
       let elevationChart = null;
       let elevationFetchTimer = null;
       let currentElevationData = [];
+      let isSpotAddMode = false;
+      let isSpotEditMode = false;
 
       // 全画面表示機能
       const fullscreenBtn = document.getElementById("fullscreen-btn");
@@ -1327,9 +1393,34 @@
 
       const STORAGE_KEY = "heijo_multi_routes_v1";
 
+      // --- スポット作成モードの編集状態をリセットする関数 ---
+      function resetSpotMode() {
+        isSpotAddMode = false;
+        isSpotEditMode = false;
+        const addSpotButton = document.getElementById("btn-add-spot");
+        const editSpotButton = document.getElementById("btn-edit-spot");
+        const spotStatus = document.getElementById("spot-status");
+        if (addSpotButton) {
+          addSpotButton.classList.remove("active");
+          addSpotButton.innerText = "スポットを追加";
+        }
+        if (editSpotButton) {
+          editSpotButton.classList.remove("active");
+          editSpotButton.innerText = "スポットを編集";
+        }
+        if (spotStatus) spotStatus.innerText = "";
+        spotMarkers.forEach((item) => {
+          item.marker.dragging.disable();
+          item.marker._spotMoving = false;
+          if (item.marker.getTooltip()) item.marker.closeTooltip();
+        });
+        refreshAllSpotPopups();
+      }
+
       // --- おもいでモードのルートをリセットする関数 ---
       function resetOmoideRoute() {
         if (isTourRunning) return;
+        resetSpotMode();
 
         // 描画されているルートやマーカーを削除
         if (routePolyline) {
@@ -1376,9 +1467,10 @@
       const sidebar = document.getElementById("sidebar");
       const navOsanpo = document.getElementById("nav-osanpo");
       const navOmoide = document.getElementById("nav-omoide");
-      const navImportCsv = document.getElementById("nav-import-csv");
+      const navSpot = document.getElementById("nav-spot");
       const panelOsanpo = document.getElementById("panel-osanpo");
       const panelOmoide = document.getElementById("panel-omoide");
+      const panelSpot = document.getElementById("panel-spot");
 
       menuBtn.addEventListener("click", () => {
         sidebar.classList.toggle("open");
@@ -1394,13 +1486,18 @@
       });
 
       function switchPanel(target) {
+        panelOsanpo.classList.remove("active");
+        panelOmoide.classList.remove("active");
+        panelSpot.classList.remove("active");
+        navOsanpo.classList.remove("active");
+        navOmoide.classList.remove("active");
+        navSpot.classList.remove("active");
+
         if (target === "osanpo") {
           panelOsanpo.classList.add("active");
-          panelOmoide.classList.remove("active");
           navOsanpo.classList.add("active");
-          navOmoide.classList.remove("active");
 
-          // さんぽモードに切り替えた際におもいでモードのルートをリセットする
+          // さんぽモードに切り替えた際におもいで・スポット作成の編集状態をリセットする
           resetOmoideRoute();
 
           if (userMarker) {
@@ -1427,11 +1524,10 @@
               ]);
             }
           }
-        } else {
+        } else if (target === "omoide") {
           panelOmoide.classList.add("active");
-          panelOsanpo.classList.remove("active");
           navOmoide.classList.add("active");
-          navOsanpo.classList.remove("active");
+          resetSpotMode();
 
           if (!isTracking) {
             if (trackingCircleMarker) {
@@ -1442,79 +1538,278 @@
               updateLocation(lastUserLatLng.lat, lastUserLatLng.lng);
             }
           }
+        } else if (target === "spot") {
+          panelSpot.classList.add("active");
+          navSpot.classList.add("active");
+          // スポット作成モードに入ると、さんぽみち編集状態を終了する
+          resetOmoideRoute();
         }
         sidebar.classList.remove("open");
       }
       navOsanpo.addEventListener("click", () => switchPanel("osanpo"));
       navOmoide.addEventListener("click", () => switchPanel("omoide"));
-      navImportCsv.addEventListener("click", () => {
-        document.getElementById("csv-file-input").click();
-        sidebar.classList.remove("open");
-      });
+      navSpot.addEventListener("click", () => switchPanel("spot"));
 
-      // CSVのパースとマーカー生成処理
-      function parseCSVData(text) {
+      // --- スポット表示・編集用ヘルパー ---
+      function spotPopupHtml(spot) {
+        const sourceLabel = spot.docId ? "Firebase保存済み" : "一時表示";
+        const editControls = isSpotEditMode
+          ? `
+            <div style="display:flex; gap:5px; flex-wrap:wrap;">
+              <button class="spot-edit-content-btn" style="padding:5px 7px; font-size:11px;">内容を変更</button>
+              <button class="spot-move-btn" style="padding:5px 7px; font-size:11px;">位置を変更</button>
+              <button class="spot-delete-btn" style="padding:5px 7px; font-size:11px; color:#fff; background:#d9534f; border:0; border-radius:3px;">削除</button>
+            </div>`
+          : "";
+        return `
+          <div style="min-width:220px; max-width:280px; font-family:sans-serif;">
+            <div style="font-weight:bold; margin-bottom:6px;">${escapeHtml(spot.name || "")}</div>
+            <div style="white-space:pre-wrap; margin-bottom:6px;">${escapeHtml(spot.text || "")}</div>
+            <div style="font-size:10px; color:#777; margin-bottom:8px;">${sourceLabel}</div>
+            ${editControls}
+          </div>`;
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      async function saveSpotToFirebase(spot) {
+        if (!db || !auth || !auth.currentUser) return false;
+        const data = {
+          name: spot.name || "",
+          text: spot.text || "",
+          text_yomikata: spot.yomikata || "",
+          lat: Number(spot.lat),
+          lng: Number(spot.lng),
+        };
+        if (spot.docId) {
+          await db.collection("sanpo_spots").doc(spot.docId).set(data);
+        } else {
+          const docRef = await db.collection("sanpo_spots").add(data);
+          spot.docId = docRef.id;
+        }
+        return true;
+      }
+
+      function refreshSpotMarker(spot, marker) {
+        marker.setLatLng([spot.lat, spot.lng]);
+        marker.bindPopup(spotPopupHtml(spot));
+      }
+
+      function refreshAllSpotPopups() {
+        spotMarkers.forEach((item) =>
+          item.marker.bindPopup(spotPopupHtml(item)),
+        );
+      }
+
+      function attachSpotPopupEvents(spot, marker) {
+        marker.bindPopup(spotPopupHtml(spot));
+        marker.on("popupopen", () => {
+          // 通常時は見るだけ。編集モードのときだけ操作ボタンを表示。
+          if (!isSpotEditMode) return;
+          const popupEl = marker.getPopup()?.getElement();
+          if (!popupEl) return;
+          const editBtn = popupEl.querySelector(".spot-edit-content-btn");
+          const moveBtn = popupEl.querySelector(".spot-move-btn");
+          const deleteBtn = popupEl.querySelector(".spot-delete-btn");
+
+          if (editBtn)
+            editBtn.addEventListener("click", async (event) => {
+              L.DomEvent.stopPropagation(event);
+              const name = prompt("スポットの名称を変更", spot.name || "");
+              if (name === null || name.trim() === "") return;
+              const text = prompt("スポットの解説を変更", spot.text || "");
+              if (text === null) return;
+              const yomikata = prompt(
+                "解説の読み方（音声用）を変更",
+                spot.yomikata || "",
+              );
+              if (yomikata === null) return;
+              const original = {
+                name: spot.name,
+                text: spot.text,
+                yomikata: spot.yomikata,
+              };
+              spot.name = name.trim();
+              spot.text = text;
+              spot.yomikata = yomikata;
+              try {
+                if (spot.docId) await saveSpotToFirebase(spot);
+                refreshSpotMarker(spot, marker);
+                marker.openPopup();
+              } catch (error) {
+                Object.assign(spot, original);
+                refreshSpotMarker(spot, marker);
+                alert("スポットの変更保存に失敗しました。\n" + error.message);
+              }
+            });
+
+          if (moveBtn)
+            moveBtn.addEventListener("click", (event) => {
+              L.DomEvent.stopPropagation(event);
+              marker.closePopup();
+              marker.dragging.enable();
+              marker
+                .bindTooltip(
+                  "ドラッグして位置を変更。終了したらもう一度クリック",
+                  {
+                    permanent: true,
+                    direction: "top",
+                  },
+                )
+                .openTooltip();
+              marker._spotMoving = true;
+            });
+
+          if (deleteBtn)
+            deleteBtn.addEventListener("click", async (event) => {
+              L.DomEvent.stopPropagation(event);
+              if (!confirm(`「${spot.name}」を削除しますか？`)) return;
+              try {
+                if (spot.docId && db && auth && auth.currentUser) {
+                  await db.collection("sanpo_spots").doc(spot.docId).delete();
+                }
+                spots = spots.filter((item) => item !== spot);
+                renderSpotMarkers();
+              } catch (error) {
+                alert("スポットの削除に失敗しました。\n" + error.message);
+              }
+            });
+        });
+
+        marker.on("dragend", async () => {
+          if (!marker._spotMoving || !isSpotEditMode) {
+            marker.dragging.disable();
+            return;
+          }
+          const pos = marker.getLatLng();
+          const oldLat = spot.lat,
+            oldLng = spot.lng;
+          spot.lat = pos.lat;
+          spot.lng = pos.lng;
+          marker._spotMoving = false;
+          if (marker.getTooltip()) marker.closeTooltip();
+          try {
+            if (spot.docId) await saveSpotToFirebase(spot);
+            marker.bindPopup(spotPopupHtml(spot)).openPopup();
+          } catch (error) {
+            spot.lat = oldLat;
+            spot.lng = oldLng;
+            marker.setLatLng([oldLat, oldLng]);
+            alert("スポットの位置保存に失敗しました。\n" + error.message);
+          } finally {
+            marker.dragging.disable();
+          }
+        });
+        marker.dragging.disable();
+      }
+
+      // --- スポットのマーカー生成処理 ---
+      function renderSpotMarkers() {
+        spotMarkers.forEach((s) => {
+          map.removeLayer(s.marker);
+        });
+        spotMarkers = spots.map((spot) => {
+          const marker = L.marker([spot.lat, spot.lng]).addTo(map);
+          attachSpotPopupEvents(spot, marker);
+          return { ...spot, marker };
+        });
+      }
+
+      // --- Firebaseからスポットを自動読み込み ---
+      async function loadSpotsFromFirebase() {
+        if (!db || !auth) return;
+        try {
+          await authReady;
+          const currentUser = auth.currentUser;
+          if (!currentUser) return;
+
+          const snapshot = await db.collection("sanpo_spots").get();
+          spots = [];
+          snapshot.forEach((doc) => {
+            const data = doc.data() || {};
+            const lat = Number(data.lat);
+            const lng = Number(data.lng);
+            if (
+              typeof data.name === "string" &&
+              typeof data.text === "string" &&
+              !Number.isNaN(lat) &&
+              !Number.isNaN(lng)
+            ) {
+              spots.push({
+                name: data.name,
+                text: data.text,
+                yomikata:
+                  typeof data.text_yomikata === "string"
+                    ? data.text_yomikata
+                    : "",
+                lat,
+                lng,
+                visited: false,
+                docId: doc.id,
+              });
+            }
+          });
+          renderSpotMarkers();
+        } catch (error) {
+          console.error("Firebaseスポット読み込みエラー:", error);
+        }
+      }
+
+      // --- CSV手動読み込み（おとなよう・互換用） ---
+      function parseCSVData(text, onComplete) {
         Papa.parse(text, {
           header: true,
           skipEmptyLines: true,
           complete: function (results) {
-            spots = results.data
-              .map((row) => {
-                let photoVal = row.photo ? row.photo.trim() : "";
-                if (
-                  photoVal !== "" &&
-                  !photoVal.toLowerCase().endsWith(".jpg") &&
-                  !photoVal.toLowerCase().endsWith(".png")
-                ) {
-                  photoVal += ".jpg";
-                }
-                return {
-                  name: row.name,
-                  text: row.text,
-                  yomikata: row.text_yomikata || "",
-                  photo: photoVal,
-                  lat: parseFloat(row.lat),
-                  lng: parseFloat(row.lng),
-                  visited: false,
-                };
-              })
+            const importedSpots = results.data
+              .map((row) => ({
+                name: row.name || "",
+                text: row.text || "",
+                yomikata: row.text_yomikata || "",
+                lat: parseFloat(row.lat),
+                lng: parseFloat(row.lng),
+                visited: false,
+              }))
               .filter((s) => !isNaN(s.lat) && !isNaN(s.lng));
-
-            if (spots.length === 0) return;
-
-            spotMarkers.forEach((s) => map.removeLayer(s.marker));
-            spotMarkers = spots.map((spot) => {
-              const marker = L.marker([spot.lat, spot.lng]).addTo(map);
-              let popupHtml = `<b>${spot.name}</b><br>${spot.text}`;
-              if (spot.photo) {
-                popupHtml += `<br><img src="photo/${spot.photo}" class="spot-popup-img" alt="${spot.name}" onerror="this.style.display='none';">`;
-              }
-              marker.bindPopup(popupHtml);
-              return { ...spot, marker };
-            });
+            if (typeof onComplete === "function") onComplete(importedSpots);
           },
         });
       }
 
-      // --- CSV自動読み込みロジック ---
-      async function loadCSV() {
-        try {
-          const response = await fetch("./sanpo.csv");
-          if (!response.ok) return;
-          const text = await response.text();
-          parseCSVData(text);
-        } catch (error) {}
+      async function saveImportedSpotsToFirebase(importedSpots) {
+        if (!db || !auth || !auth.currentUser) {
+          throw new Error("Firebaseへの保存にはログインが必要です。");
+        }
+        const batch = db.batch();
+        importedSpots.forEach((spot) => {
+          const ref = db.collection("sanpo_spots").doc();
+          batch.set(ref, {
+            name: spot.name,
+            text: spot.text,
+            text_yomikata: spot.yomikata,
+            lat: Number(spot.lat),
+            lng: Number(spot.lng),
+          });
+        });
+        await batch.commit();
+        await loadSpotsFromFirebase();
       }
 
       document.addEventListener("DOMContentLoaded", () => {
-        loadCSV();
-
-        // 起動時はFirebaseの認証状態を確認し、ログイン後にFirebaseから保存ルートを読み込む。
+        // 起動時はFirebaseの認証状態を確認し、ログイン後にFirebaseから保存ルートとスポットを読み込む。
         if (!auth) return;
 
         authReady.then((initialUser) => {
           if (initialUser) {
             updateRouteSelectOptions();
+            loadSpotsFromFirebase();
             return;
           }
 
@@ -1539,8 +1834,9 @@
               .then(() => {
                 modal.style.display = "none";
                 btnLogin.disabled = false;
-                // ログイン完了後に初めてFirebaseから保存ルートを取得
+                // ログイン完了後に初めてFirebaseから保存ルートとスポットを取得
                 updateRouteSelectOptions();
+                loadSpotsFromFirebase();
               })
               .catch((error) => {
                 btnLogin.disabled = false;
@@ -2669,6 +2965,66 @@
         updateMidpointMarkers();
       }
 
+      async function addSpotAtLocation(lat, lng) {
+        if (!isSpotAddMode) return;
+
+        if (!auth || !db) {
+          alert("Firebaseに接続できないため、スポットを保存できませんでした。");
+          return;
+        }
+
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          alert("スポットの追加にはログインが必要です。");
+          return;
+        }
+
+        const name = prompt("スポットの名称をいれてね");
+        if (name === null || name.trim() === "") return;
+
+        const text = prompt("スポットの解説をいれてね");
+        if (text === null) return;
+
+        const textYomikata = prompt("解説の読み方（音声用）をいれてね", text);
+        if (textYomikata === null) return;
+
+        const spotData = {
+          name: name.trim(),
+          text: text,
+          text_yomikata: textYomikata,
+          lat: lat,
+          lng: lng,
+        };
+
+        try {
+          await db.collection("sanpo_spots").add(spotData);
+          isSpotAddMode = false;
+          resetSpotMode();
+          await loadSpotsFromFirebase();
+          const added = spots.find(
+            (spot) =>
+              spot.name === spotData.name &&
+              spot.lat === spotData.lat &&
+              spot.lng === spotData.lng,
+          );
+          if (added) {
+            const item = spotMarkers.find(
+              (entry) => entry.docId === added.docId,
+            );
+            if (item) item.marker.openPopup();
+          }
+          alert(`「${spotData.name}」をスポットとして保存しました！`);
+        } catch (error) {
+          console.error("Firebaseスポット保存エラー:", error);
+          alert(
+            "Firebaseへのスポット保存に失敗しました。\n" +
+              (error.code || "") +
+              "\n" +
+              (error.message || ""),
+          );
+        }
+      }
+
       function insertRouteMarkerAt(lat, lng, insertIndex) {
         const pointId = nextPointId++;
         const pinIcon = L.divIcon({
@@ -2803,18 +3159,26 @@
           }
           map.panTo([clickLat, clickLng]);
         } else {
-          if (
-            isDrawMode &&
-            document.getElementById("panel-omoide").classList.contains("active")
-          ) {
+          const isSpotPanelActive = document
+            .getElementById("panel-spot")
+            .classList.contains("active");
+          const isOmoidePanelActive = document
+            .getElementById("panel-omoide")
+            .classList.contains("active");
+
+          if (isSpotPanelActive) {
+            if (isSpotAddMode) addSpotAtLocation(clickLat, clickLng);
+          } else if (isDrawMode && isOmoidePanelActive) {
             addRouteMarker(clickLat, clickLng);
-          } else if (!isTourRunning) {
+          } else if (isOmoidePanelActive && !isTourRunning) {
             updateLocation(clickLat, clickLng);
           }
         }
       });
 
       const btnDrawMode = document.getElementById("btn-draw-mode");
+      const btnAddSpot = document.getElementById("btn-add-spot");
+      const btnEditSpot = document.getElementById("btn-edit-spot");
       const btnStartTour = document.getElementById("btn-start-tour");
       const btnPauseTour = document.getElementById("btn-pause-tour");
       const btnStopTour = document.getElementById("btn-stop-tour");
@@ -2840,6 +3204,8 @@
       const btnImportHelp = document.getElementById("btn-import-help");
       const routeFileInput = document.getElementById("route-file-input");
       const csvFileInput = document.getElementById("csv-file-input");
+      const btnImportCsv = document.getElementById("btn-import-csv");
+      const btnSpotCsvHelp = document.getElementById("btn-spot-csv-help");
 
       const btnToggleElevation = document.getElementById(
         "btn-toggle-elevation",
@@ -2957,6 +3323,59 @@
         updateStorageButtonsState();
         if (hasSelected) loadSelectedRoute();
       });
+
+      if (btnAddSpot) {
+        btnAddSpot.addEventListener("click", () => {
+          if (isTourRunning || isDrawMode) return;
+          ensureAuthenticated(() => {
+            isSpotEditMode = false;
+            if (btnEditSpot) {
+              btnEditSpot.classList.remove("active");
+              btnEditSpot.innerText = "スポットを編集";
+            }
+            isSpotAddMode = !isSpotAddMode;
+            const spotStatus = document.getElementById("spot-status");
+            if (isSpotAddMode) {
+              btnAddSpot.classList.add("active");
+              btnAddSpot.innerText = "地図をクリックして追加";
+              if (spotStatus)
+                spotStatus.innerText =
+                  "追加したい場所を地図上でクリックしてください。";
+            } else {
+              btnAddSpot.classList.remove("active");
+              btnAddSpot.innerText = "スポットを追加";
+              if (spotStatus) spotStatus.innerText = "";
+            }
+            refreshAllSpotPopups();
+          });
+        });
+      }
+
+      if (btnEditSpot) {
+        btnEditSpot.addEventListener("click", () => {
+          if (isTourRunning || isDrawMode) return;
+          ensureAuthenticated(() => {
+            isSpotAddMode = false;
+            btnAddSpot.classList.remove("active");
+            btnAddSpot.innerText = "スポットを追加";
+            isSpotEditMode = !isSpotEditMode;
+            const spotStatus = document.getElementById("spot-status");
+            if (isSpotEditMode) {
+              btnEditSpot.classList.add("active");
+              btnEditSpot.innerText = "編集をおわる";
+              if (spotStatus)
+                spotStatus.innerText =
+                  "スポットを選ぶと、内容・位置の変更や削除ができます。";
+            } else {
+              btnEditSpot.classList.remove("active");
+              btnEditSpot.innerText = "スポットを編集";
+              if (spotStatus) spotStatus.innerText = "";
+              spotMarkers.forEach((item) => item.marker.dragging.disable());
+            }
+            refreshAllSpotPopups();
+          });
+        });
+      }
 
       btnDrawMode.addEventListener("click", () => {
         if (isTourRunning) return;
@@ -3397,11 +3816,51 @@
       if (csvFileInput) {
         csvFileInput.addEventListener("change", (e) => {
           const file = e.target.files[0];
+          if (
+            !document.getElementById("panel-spot").classList.contains("active")
+          ) {
+            csvFileInput.value = "";
+            return;
+          }
           if (!file) return;
           const reader = new FileReader();
           reader.onload = (event) => {
-            parseCSVData(event.target.result);
-            alert("CSVスポットデータを読み込みました！");
+            parseCSVData(event.target.result, async (importedSpots) => {
+              if (importedSpots.length === 0) {
+                alert("CSVから有効なスポットを読み込めませんでした。");
+                csvFileInput.value = "";
+                return;
+              }
+
+              const shouldSaveToFirebase = confirm(
+                `CSVから${importedSpots.length}件のスポットを読み込みました。\n\nOK：Firebaseに保存する\nキャンセル：今回だけ一時的に表示する`,
+              );
+
+              if (!shouldSaveToFirebase) {
+                spots = importedSpots;
+                renderSpotMarkers();
+                alert(
+                  "CSVスポットを一時的に表示しました。Firebaseには保存していません。",
+                );
+                csvFileInput.value = "";
+                return;
+              }
+
+              ensureAuthenticated(async () => {
+                try {
+                  await saveImportedSpotsToFirebase(importedSpots);
+                  alert("CSVスポットをFirebaseに保存しました。");
+                } catch (error) {
+                  console.error("CSVスポットFirebase保存エラー:", error);
+                  alert(
+                    "CSVスポットのFirebase保存に失敗しました。\n" +
+                      error.message,
+                  );
+                } finally {
+                  csvFileInput.value = "";
+                }
+              });
+            });
           };
           reader.readAsText(file);
         });
@@ -3410,7 +3869,25 @@
       if (btnImportHelp) {
         btnImportHelp.addEventListener("click", () => {
           alert(
-            "【読み込み可能な形式】\n・JSONファイル (.json): 保存したさんぽみちデータ\n・CSVファイル (.csv): スポット位置情報データ (name, text, text_yomikata, photo, lat, lng)",
+            "【読み込み可能な形式】\n・JSONファイル (.json): 保存したさんぽみちデータ",
+          );
+        });
+      }
+
+      if (btnImportCsv) {
+        btnImportCsv.addEventListener("click", () => {
+          if (
+            !document.getElementById("panel-spot").classList.contains("active")
+          )
+            return;
+          document.getElementById("csv-file-input").click();
+        });
+      }
+
+      if (btnSpotCsvHelp) {
+        btnSpotCsvHelp.addEventListener("click", () => {
+          alert(
+            "【読み込み可能なCSV形式】\nname, text, text_yomikata, photo, lat, lng\n\nlat・lngを省略すると、スポットを作成することはできません。",
           );
         });
       }
