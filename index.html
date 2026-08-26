@@ -526,6 +526,84 @@
       .leaflet-control-layers-expanded .leaflet-control-layers-list {
         margin-top: 6px;
       }
+
+      /* スポット内容編集ダイアログ */
+      #spot-edit-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 10001;
+        background: rgba(0, 0, 0, 0.5);
+        justify-content: center;
+        align-items: center;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+
+      #spot-edit-modal .spot-edit-dialog {
+        width: min(420px, 100%);
+        max-height: calc(100dvh - 32px);
+        overflow-y: auto;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+        padding: 16px;
+        box-sizing: border-box;
+        font-family: sans-serif;
+      }
+
+      #spot-edit-modal label {
+        display: block;
+        margin: 0 0 5px;
+        font-size: 12px;
+        font-weight: bold;
+        color: #444;
+      }
+
+      #spot-edit-modal input,
+      #spot-edit-modal textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        margin-bottom: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 13px;
+        font-family: sans-serif;
+      }
+
+      #spot-edit-modal textarea {
+        min-height: 88px;
+        resize: none;
+        overflow-y: hidden;
+        line-height: 1.5;
+      }
+
+      #spot-edit-modal .spot-edit-dialog-buttons {
+        display: flex;
+        gap: 8px;
+      }
+
+      #spot-edit-modal .spot-edit-dialog-buttons button {
+        flex: 1;
+        padding: 9px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: bold;
+      }
+
+      #btn-spot-edit-save {
+        background: #007bff;
+        color: #fff;
+      }
+
+      #btn-spot-edit-cancel {
+        background: #ccc;
+        color: #333;
+      }
+
     </style>
   </head>
   <body>
@@ -603,6 +681,27 @@
           >
             キャンセル
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- スポット内容編集モーダル -->
+    <div id="spot-edit-modal">
+      <div class="spot-edit-dialog">
+        <h3 style="margin: 0 0 12px; font-size: 16px">スポットの内容を変更</h3>
+
+        <label for="spot-edit-name">名称</label>
+        <input id="spot-edit-name" type="text" />
+
+        <label for="spot-edit-text">解説</label>
+        <textarea id="spot-edit-text" rows="4"></textarea>
+
+        <label for="spot-edit-yomikata">解説の読み方（音声用）</label>
+        <textarea id="spot-edit-yomikata" rows="3"></textarea>
+
+        <div class="spot-edit-dialog-buttons">
+          <button id="btn-spot-edit-cancel" type="button">キャンセル</button>
+          <button id="btn-spot-edit-save" type="button">内容を保存</button>
         </div>
       </div>
     </div>
@@ -1603,9 +1702,89 @@
       }
 
       function refreshAllSpotPopups() {
+        // 編集モード切替時、選択中（ポップアップ表示中）のスポットを維持する。
+        // いったん閉じてから再バインド・再表示することで、
+        // popupopenイベントを確実に発生させ、編集ボタンのイベントを再登録する。
+        const openItem = spotMarkers.find((item) => item.marker.isPopupOpen());
+        if (openItem) openItem.marker.closePopup();
+
         spotMarkers.forEach((item) =>
           item.marker.bindPopup(spotPopupHtml(item)),
         );
+
+        if (openItem) {
+          setTimeout(() => openItem.marker.openPopup(), 0);
+        }
+      }
+
+      function autoResizeSpotTextarea(textarea) {
+        if (!textarea) return;
+        textarea.style.height = "auto";
+        textarea.style.height = `${Math.max(textarea.scrollHeight, 88)}px`;
+      }
+
+      function openSpotEditDialog(spot, marker) {
+        const modal = document.getElementById("spot-edit-modal");
+        const nameInput = document.getElementById("spot-edit-name");
+        const textInput = document.getElementById("spot-edit-text");
+        const yomikataInput = document.getElementById("spot-edit-yomikata");
+        const saveButton = document.getElementById("btn-spot-edit-save");
+        const cancelButton = document.getElementById("btn-spot-edit-cancel");
+
+        if (!modal || !nameInput || !textInput || !yomikataInput) return;
+
+        nameInput.value = spot.name || "";
+        textInput.value = spot.text || "";
+        yomikataInput.value = spot.yomikata || "";
+        autoResizeSpotTextarea(textInput);
+        autoResizeSpotTextarea(yomikataInput);
+        modal.style.display = "flex";
+        nameInput.focus();
+
+        const close = () => {
+          modal.style.display = "none";
+          saveButton.onclick = null;
+          cancelButton.onclick = null;
+          textInput.oninput = null;
+          yomikataInput.oninput = null;
+        };
+
+        textInput.oninput = () => autoResizeSpotTextarea(textInput);
+        yomikataInput.oninput = () => autoResizeSpotTextarea(yomikataInput);
+
+        cancelButton.onclick = () => close();
+
+        saveButton.onclick = async () => {
+          const name = nameInput.value.trim();
+          if (!name) {
+            alert("スポットの名称を入力してください。");
+            nameInput.focus();
+            return;
+          }
+
+          const original = {
+            name: spot.name,
+            text: spot.text,
+            yomikata: spot.yomikata,
+          };
+
+          spot.name = name;
+          spot.text = textInput.value;
+          spot.yomikata = yomikataInput.value;
+          saveButton.disabled = true;
+
+          try {
+            if (spot.docId) await saveSpotToFirebase(spot);
+            refreshSpotMarker(spot, marker);
+            close();
+            marker.openPopup();
+          } catch (error) {
+            Object.assign(spot, original);
+            refreshSpotMarker(spot, marker);
+            saveButton.disabled = false;
+            alert("スポットの変更保存に失敗しました。\n" + error.message);
+          }
+        };
       }
 
       function attachSpotPopupEvents(spot, marker) {
@@ -1620,34 +1799,9 @@
           const deleteBtn = popupEl.querySelector(".spot-delete-btn");
 
           if (editBtn)
-            editBtn.addEventListener("click", async (event) => {
+            editBtn.addEventListener("click", (event) => {
               L.DomEvent.stopPropagation(event);
-              const name = prompt("スポットの名称を変更", spot.name || "");
-              if (name === null || name.trim() === "") return;
-              const text = prompt("スポットの解説を変更", spot.text || "");
-              if (text === null) return;
-              const yomikata = prompt(
-                "解説の読み方（音声用）を変更",
-                spot.yomikata || "",
-              );
-              if (yomikata === null) return;
-              const original = {
-                name: spot.name,
-                text: spot.text,
-                yomikata: spot.yomikata,
-              };
-              spot.name = name.trim();
-              spot.text = text;
-              spot.yomikata = yomikata;
-              try {
-                if (spot.docId) await saveSpotToFirebase(spot);
-                refreshSpotMarker(spot, marker);
-                marker.openPopup();
-              } catch (error) {
-                Object.assign(spot, original);
-                refreshSpotMarker(spot, marker);
-                alert("スポットの変更保存に失敗しました。\n" + error.message);
-              }
+              openSpotEditDialog(spot, marker);
             });
 
           if (moveBtn)
