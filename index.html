@@ -423,9 +423,30 @@
         border-radius: 50%;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
         cursor: grab;
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+      }
+      .custom-route-pin:hover {
+        transform: scale(1.8);
+        box-shadow: 0 0 0 3px rgba(255, 51, 51, 0.35),
+          0 1px 4px rgba(0, 0, 0, 0.55);
       }
       .custom-route-pin:active {
         cursor: grabbing;
+      }
+      .custom-route-pin.route-point-selected {
+        transform: scale(1.8);
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.55),
+          0 1px 4px rgba(0, 0, 0, 0.55);
+      }
+      .route-selection-box {
+        position: absolute;
+        z-index: 1000;
+        border: 2px solid #007bff;
+        background: rgba(0, 123, 255, 0.15);
+        pointer-events: none;
+      }
+      .route-area-selecting {
+        cursor: crosshair;
       }
       .custom-midpoint-pin {
         width: 5px;
@@ -941,6 +962,16 @@
             削除
           </button>
         </div>
+        <div style="display: flex; gap: 6px; width: 100%">
+          <button id="btn-area-select-route" style="flex: 1">範囲選択</button>
+          <button id="btn-delete-selected-points" disabled style="color: #d9534f; flex: 1">
+            選択頂点を削除
+          </button>
+        </div>
+        <button id="btn-thin-selected-points" disabled>
+          選択頂点を間引く（1/2）
+        </button>
+        <div id="selected-points-status" style="min-height: 16px; color: #666"></div>
       </div>
 
       <!-- 画面下部に固定する表示群 -->
@@ -1306,6 +1337,11 @@
       let routePolyline = null;
       let routeMarkers = [];
       let midpointMarkers = [];
+      let isAreaSelectMode = false;
+      let selectedRoutePointIds = new Set();
+      let areaSelectionBox = null;
+      let isSelectingRouteArea = false;
+      let suppressNextMapClick = false;
       let isTourRunning = false;
       let isTourPaused = false;
       let tourInterval = null;
@@ -1519,6 +1555,8 @@
       // --- おもいでモードのルートをリセットする関数 ---
       function resetOmoideRoute() {
         if (isTourRunning) return;
+        if (isAreaSelectMode) setAreaSelectMode(false);
+        else clearRoutePointSelection();
         resetSpotMode();
 
         // 描画されているルートやマーカーを削除
@@ -1583,6 +1621,70 @@
         if (sidebar.classList.contains("open"))
           sidebar.classList.remove("open");
       });
+
+      const mapContainer = map.getContainer();
+      mapContainer.addEventListener(
+        "mousedown",
+        (event) => {
+          if (
+            !isAreaSelectMode ||
+            event.button !== 0 ||
+            event.target.closest(".leaflet-control, .leaflet-popup")
+          )
+            return;
+          event.preventDefault();
+          event.stopPropagation();
+          isSelectingRouteArea = true;
+          const bounds = mapContainer.getBoundingClientRect();
+          const start = {
+            x: event.clientX - bounds.left,
+            y: event.clientY - bounds.top,
+          };
+          areaSelectionBox = document.createElement("div");
+          areaSelectionBox.className = "route-selection-box";
+          mapContainer.appendChild(areaSelectionBox);
+          setSelectionBoxBounds(start, start);
+
+          const move = (moveEvent) => {
+            if (!isSelectingRouteArea) return;
+            moveEvent.preventDefault();
+            moveEvent.stopPropagation();
+            setSelectionBoxBounds(start, {
+              x: moveEvent.clientX - bounds.left,
+              y: moveEvent.clientY - bounds.top,
+            });
+          };
+          const finish = (upEvent) => {
+            if (!isSelectingRouteArea) return;
+            upEvent.preventDefault();
+            upEvent.stopPropagation();
+            isSelectingRouteArea = false;
+            const end = {
+              x: upEvent.clientX - bounds.left,
+              y: upEvent.clientY - bounds.top,
+            };
+            selectRoutePointsInArea(start, end);
+            areaSelectionBox.remove();
+            areaSelectionBox = null;
+            suppressNextMapClick = true;
+            document.removeEventListener("mousemove", move, true);
+            document.removeEventListener("mouseup", finish, true);
+          };
+          document.addEventListener("mousemove", move, true);
+          document.addEventListener("mouseup", finish, true);
+        },
+        true,
+      );
+      mapContainer.addEventListener(
+        "click",
+        (event) => {
+          if (!suppressNextMapClick) return;
+          suppressNextMapClick = false;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        },
+        true,
+      );
 
       function switchPanel(target) {
         panelOsanpo.classList.remove("active");
@@ -3053,6 +3155,78 @@
         return calculateArrayDistance(routePoints);
       }
 
+      function refreshRoutePointSelection() {
+        routeMarkers.forEach((item) => {
+          const element = item.marker.getElement();
+          if (element) {
+            element.classList.toggle(
+              "route-point-selected",
+              selectedRoutePointIds.has(item.id),
+            );
+          }
+        });
+        const selectedCount = selectedRoutePointIds.size;
+        const status = document.getElementById("selected-points-status");
+        const deleteButton = document.getElementById("btn-delete-selected-points");
+        const thinButton = document.getElementById("btn-thin-selected-points");
+        if (status)
+          status.innerText = selectedCount
+            ? `${selectedCount}個の頂点を選択中`
+            : "";
+        if (deleteButton) deleteButton.disabled = selectedCount === 0;
+        if (thinButton) thinButton.disabled = selectedCount < 2;
+      }
+
+      function clearRoutePointSelection() {
+        selectedRoutePointIds.clear();
+        refreshRoutePointSelection();
+      }
+
+      function setAreaSelectMode(enabled) {
+        isAreaSelectMode = enabled;
+        const button = document.getElementById("btn-area-select-route");
+        const mapContainer = map.getContainer();
+        if (button) {
+          button.classList.toggle("active", enabled);
+          button.innerText = enabled ? "範囲選択を終了" : "範囲選択";
+        }
+        mapContainer.classList.toggle("route-area-selecting", enabled);
+        if (enabled) {
+          map.dragging.disable();
+        } else {
+          map.dragging.enable();
+          clearRoutePointSelection();
+        }
+      }
+
+      function selectRoutePointsInArea(start, end) {
+        const left = Math.min(start.x, end.x);
+        const right = Math.max(start.x, end.x);
+        const top = Math.min(start.y, end.y);
+        const bottom = Math.max(start.y, end.y);
+        selectedRoutePointIds = new Set(
+          routeMarkers
+            .filter((item) => {
+              const point = map.latLngToContainerPoint(item.marker.getLatLng());
+              return (
+                point.x >= left &&
+                point.x <= right &&
+                point.y >= top &&
+                point.y <= bottom
+              );
+            })
+            .map((item) => item.id),
+        );
+        refreshRoutePointSelection();
+      }
+
+      function setSelectionBoxBounds(start, end) {
+        areaSelectionBox.style.left = `${Math.min(start.x, end.x)}px`;
+        areaSelectionBox.style.top = `${Math.min(start.y, end.y)}px`;
+        areaSelectionBox.style.width = `${Math.abs(end.x - start.x)}px`;
+        areaSelectionBox.style.height = `${Math.abs(end.y - start.y)}px`;
+      }
+
       function updateRouteAndDisplay() {
         routePoints = routeMarkers.map((item) => {
           const latlng = item.marker.getLatLng();
@@ -3083,6 +3257,7 @@
             if (map.hasLayer(item.marker)) map.removeLayer(item.marker);
           }
         });
+        refreshRoutePointSelection();
 
         const totalRouteDist = calculateTotalRouteDistance();
         const distInfoElem = document.getElementById("distance-info");
@@ -3091,7 +3266,7 @@
         const btnToggleElev = document.getElementById("btn-toggle-elevation");
 
         if (isDrawMode && routePoints.length > 0) {
-          progressTextElem.innerHTML = `<b>さんぽみちのきょり: ${formatDistance(totalRouteDist)}</b><br><span style="color:#666; font-size:10px;">・ピンをドラッグ：位置変更<br>・ピンをクリック：削除<br>・オレンジピン：クリックで頂点追加</span>`;
+          progressTextElem.innerHTML = `<b>さんぽみちのきょり: ${formatDistance(totalRouteDist)}</b><br><span style="color:#666; font-size:10px;">・ピンをドラッグ：位置変更<br>・ピンをクリック：削除<br>・オレンジピン：クリックで頂点追加<br>・範囲選択：ドラッグで複数の頂点を選択</span>`;
           altTextElem.style.display = "none";
           btnToggleElev.style.display = "none";
           distInfoElem.style.display = "block";
@@ -3285,6 +3460,10 @@
       }
 
       map.on("click", (e) => {
+        if (suppressNextMapClick) {
+          suppressNextMapClick = false;
+          return;
+        }
         const clickLat = e.latlng.lat;
         const clickLng = e.latlng.lng;
         const isOsanpoActive = document
@@ -3346,10 +3525,54 @@
       const btnStopSpeech = document.getElementById("btn-stop-speech");
       const routeSelect = document.getElementById("route-select");
       const editStoragePanel = document.getElementById("edit-storage-panel");
+      const btnAreaSelectRoute = document.getElementById(
+        "btn-area-select-route",
+      );
+      const btnDeleteSelectedPoints = document.getElementById(
+        "btn-delete-selected-points",
+      );
+      const btnThinSelectedPoints = document.getElementById(
+        "btn-thin-selected-points",
+      );
 
       const btnSpeedNormal = document.getElementById("btn-speed-normal");
       const btnSpeedExpress = document.getElementById("btn-speed-express");
       const btnSpeedLimited = document.getElementById("btn-speed-limited");
+
+      btnAreaSelectRoute.addEventListener("click", () => {
+        if (!isDrawMode) return;
+        setAreaSelectMode(!isAreaSelectMode);
+      });
+
+      btnDeleteSelectedPoints.addEventListener("click", () => {
+        if (selectedRoutePointIds.size === 0) return;
+        routeMarkers
+          .filter((item) => selectedRoutePointIds.has(item.id))
+          .forEach((item) => map.removeLayer(item.marker));
+        routeMarkers = routeMarkers.filter(
+          (item) => !selectedRoutePointIds.has(item.id),
+        );
+        clearRoutePointSelection();
+        updateRouteAndDisplay();
+      });
+
+      btnThinSelectedPoints.addEventListener("click", () => {
+        const selectedMarkers = routeMarkers.filter((item) =>
+          selectedRoutePointIds.has(item.id),
+        );
+        if (selectedMarkers.length < 2) return;
+        const idsToRemove = new Set(
+          selectedMarkers
+            .filter((_item, index) => index % 2 === 1)
+            .map((item) => item.id),
+        );
+        routeMarkers
+          .filter((item) => idsToRemove.has(item.id))
+          .forEach((item) => map.removeLayer(item.marker));
+        routeMarkers = routeMarkers.filter((item) => !idsToRemove.has(item.id));
+        clearRoutePointSelection();
+        updateRouteAndDisplay();
+      });
       const btnSpeedShinkansen = document.getElementById(
         "btn-speed-shinkansen",
       );
@@ -3551,6 +3774,8 @@
           btnDrawMode.classList.add("active");
           updateRouteAndDisplay();
         } else {
+          if (isAreaSelectMode) setAreaSelectMode(false);
+          else clearRoutePointSelection();
           btnDrawMode.classList.remove("active");
           document.getElementById("status").innerText = "";
           distInfoElem.style.display = "none";
