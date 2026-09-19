@@ -762,8 +762,8 @@
         <div class="nav-desc">きろくしたさんぽみちをさいせいする。</div>
       </button>
       <button id="nav-spot" class="nav-btn">
-        <div>（おとなよう）スポット作成モード</div>
-        <div class="nav-desc">スポットの追加・編集・CSV読込</div>
+        <div>（おとなよう）管理モード</div>
+        <div class="nav-desc">スポットの追加・編集・CSV読込・さんぽみち管理</div>
       </button>
     </nav>
 
@@ -908,7 +908,7 @@
         "
       ></div>
 
-      <!-- さんぽみちをえらぶプルダウン（詳細設定から独立） -->
+      <!-- さんぽみちをえらぶプルダウン（さいせい用） -->
       <div id="route-select-container" style="margin-bottom: 8px">
         <select
           id="route-select"
@@ -920,7 +920,6 @@
 
       <!-- 普段使うきのう -->
       <div class="control-panel">
-        <button id="btn-draw-mode">さんぽみちをつくる</button>
         <button id="btn-start-tour" disabled>▶ さんぽスタート</button>
         <button id="btn-pause-tour" disabled style="display: none">
           ⏸ 一時停止
@@ -937,42 +936,35 @@
         </button>
       </div>
 
-      <!-- 編集モードのときのみ表示する保存・編集操作パネル -->
-      <div
-        id="edit-storage-panel"
-        style="
-          margin-top: 8px;
-          display: none;
-          flex-direction: column;
-          gap: 4px;
-          font-size: 12px;
-        "
-      >
-        <div style="display: flex; gap: 6px; width: 100%">
-          <button id="btn-save-route" disabled style="flex: 1">
-            あたらしくほぞん
+      <!-- 詳細設定 -->
+      <details class="advanced-settings" id="details-advanced">
+        <summary>くわしいせってい</summary>
+
+        <div class="control-panel" style="margin-top: 0; margin-bottom: 8px">
+          <button id="btn-reset-route">さんぽみちリセット</button>
+        </div>
+
+        <div class="speed-panel">
+          <span>はやさ:</span>
+          <button id="btn-speed-normal" class="active">ふつう</button>
+          <button id="btn-speed-express">きゅうこう</button>
+          <button id="btn-speed-limited">とっきゅう</button>
+          <button id="btn-speed-shinkansen">しんかんせん</button>
+        </div>
+
+        <div class="participant-panel">
+          <span>さんかしゃ:</span>
+          <button id="btn-user-taichi" class="participant-btn active">
+            たいち
           </button>
-          <button id="btn-overwrite-route" disabled style="flex: 1">
-            うわがきほぞん
+          <button id="btn-user-okaasan" class="participant-btn">
+            おかあさん
+          </button>
+          <button id="btn-user-otousan" class="participant-btn active">
+            おとうさん
           </button>
         </div>
-        <div style="display: flex; gap: 6px; width: 100%">
-          <button id="btn-rename-route" style="flex: 1">なまえをかえる</button>
-          <button id="btn-delete-saved-route" style="color: #d9534f; flex: 1">
-            削除
-          </button>
-        </div>
-        <div style="display: flex; gap: 6px; width: 100%">
-          <button id="btn-area-select-route" style="flex: 1">範囲選択</button>
-          <button id="btn-delete-selected-points" disabled style="color: #d9534f; flex: 1">
-            選択頂点を削除
-          </button>
-        </div>
-        <button id="btn-thin-selected-points" disabled>
-          選択頂点を間引く（1/2）
-        </button>
-        <div id="selected-points-status" style="min-height: 16px; color: #666"></div>
-      </div>
+      </details>
 
       <!-- 画面下部に固定する表示群 -->
       <div
@@ -1041,103 +1033,9 @@
           </div>
         </div>
       </div>
-
-      <!-- 詳細設定 -->
-      <details class="advanced-settings" id="details-advanced">
-        <summary>くわしいせってい</summary>
-
-        <div class="control-panel" style="margin-top: 0; margin-bottom: 8px">
-          <button id="btn-reset-route">さんぽみちリセット</button>
-        </div>
-
-        <div class="speed-panel">
-          <span>はやさ:</span>
-          <button id="btn-speed-normal" class="active">ふつう</button>
-          <button id="btn-speed-express">きゅうこう</button>
-          <button id="btn-speed-limited">とっきゅう</button>
-          <button id="btn-speed-shinkansen">しんかんせん</button>
-        </div>
-
-        <div class="participant-panel">
-          <span>さんかしゃ:</span>
-          <button id="btn-user-taichi" class="participant-btn active">
-            たいち
-          </button>
-          <button id="btn-user-okaasan" class="participant-btn">
-            おかあさん
-          </button>
-          <button id="btn-user-otousan" class="participant-btn active">
-            おとうさん
-          </button>
-        </div>
-
-        <div class="route-storage-panel">
-          <div
-            style="
-              display: flex;
-              gap: 6px;
-              width: 100%;
-              margin-top: 4px;
-              align-items: center;
-            "
-          >
-            <button
-              id="btn-export-routes"
-              class="btn-dark-gray"
-              style="
-                flex: 1;
-                white-space: nowrap;
-                padding: 6px 2px;
-                font-size: 11px;
-              "
-            >
-              ファイルに保存
-            </button>
-            <button
-              id="btn-import-routes"
-              class="btn-dark-gray"
-              style="
-                flex: 1;
-                white-space: nowrap;
-                padding: 6px 2px;
-                font-size: 11px;
-              "
-            >
-              ファイルを読み込む
-            </button>
-            <button
-              id="btn-import-help"
-              style="
-                background: #9a9b9b;
-                color: white;
-                border: none;
-                border-radius: 50%;
-                width: 22px;
-                height: 22px;
-                font-size: 12px;
-                font-weight: bold;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                flex-shrink: 0;
-              "
-              title="読込可能なファイル形式"
-            >
-              ？
-            </button>
-          </div>
-          <input
-            type="file"
-            id="route-file-input"
-            accept=".json,.gpx"
-            style="display: none"
-          />
-        </div>
-      </details>
     </div>
 
-    <!-- ================= （おとなよう）スポット作成モードパネル ================= -->
+    <!-- ================= （おとなよう）管理モードパネル ================= -->
     <div id="panel-spot" class="panel">
       <h3
         style="
@@ -1146,7 +1044,7 @@
           margin-bottom: 8px;
         "
       >
-        （おとなよう）スポット作成モード
+        （おとなよう）管理モード
       </h3>
 
       <div
@@ -1159,11 +1057,135 @@
         "
       ></div>
 
-      <div class="control-panel" style="margin-top: 0">
-        <button id="btn-add-spot">スポットを追加</button>
-        <button id="btn-edit-spot">スポットを編集</button>
+      <!-- さんぽみちをえらぶプルダウン（管理・編集用） -->
+      <div id="manage-route-select-container" style="margin-bottom: 8px">
+        <select
+          id="manage-route-select"
+          style="width: 100%; padding: 4px; font-size: 12px"
+        >
+          <option value="">さんぽみちをえらぶ</option>
+        </select>
       </div>
 
+      <!-- さんぽみち作成・編集 -->
+      <div class="control-panel" style="margin-top: 0">
+        <button id="btn-draw-mode">さんぽみちをつくる</button>
+      </div>
+
+      <!-- さんぽみちの編集・保存 -->
+      <div
+        id="edit-storage-panel"
+        style="
+          margin-top: 8px;
+          display: none;
+          flex-direction: column;
+          gap: 4px;
+          font-size: 12px;
+        "
+      >
+        <div style="display: flex; gap: 6px; width: 100%">
+          <button id="btn-save-route" disabled style="flex: 1">
+            あたらしくほぞん
+          </button>
+          <button id="btn-overwrite-route" disabled style="flex: 1">
+            うわがきほぞん
+          </button>
+        </div>
+        <div style="display: flex; gap: 6px; width: 100%">
+          <button id="btn-rename-route" style="flex: 1">なまえをかえる</button>
+          <button id="btn-delete-saved-route" style="color: #d9534f; flex: 1">
+            削除
+          </button>
+        </div>
+        <div style="display: flex; gap: 6px; width: 100%">
+          <button id="btn-area-select-route" style="flex: 1">範囲選択</button>
+          <button
+            id="btn-delete-selected-points"
+            disabled
+            style="color: #d9534f; flex: 1"
+          >
+            選択頂点を削除
+          </button>
+        </div>
+        <button id="btn-thin-selected-points" disabled>
+          選択頂点を間引く（1/2）
+        </button>
+        <div id="selected-points-status" style="min-height: 16px; color: #666"></div>
+      </div>
+
+      <!-- さんぽみちファイル操作 -->
+      <div
+        class="route-storage-panel"
+        style="
+          margin-top: 10px;
+          padding-top: 10px;
+          border-top: 1px solid #eee;
+        "
+      >
+        <div
+          style="
+            display: flex;
+            gap: 6px;
+            width: 100%;
+            margin-top: 4px;
+            align-items: center;
+          "
+        >
+          <button
+            id="btn-export-routes"
+            class="btn-dark-gray"
+            style="
+              flex: 1;
+              white-space: nowrap;
+              padding: 6px 2px;
+              font-size: 11px;
+            "
+          >
+            ファイルに保存
+          </button>
+          <button
+            id="btn-import-routes"
+            class="btn-dark-gray"
+            style="
+              flex: 1;
+              white-space: nowrap;
+              padding: 6px 2px;
+              font-size: 11px;
+            "
+          >
+            ファイルを読み込む
+          </button>
+          <button
+            id="btn-import-help"
+            style="
+              background: #9a9b9b;
+              color: white;
+              border: none;
+              border-radius: 50%;
+              width: 22px;
+              height: 22px;
+              font-size: 12px;
+              font-weight: bold;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              flex-shrink: 0;
+            "
+            title="読込可能なファイル形式"
+          >
+            ？
+          </button>
+        </div>
+        <input
+          type="file"
+          id="route-file-input"
+          accept=".json,.gpx"
+          style="display: none"
+        />
+      </div>
+
+      <!-- スポット管理 -->
       <div
         style="
           margin-top: 10px;
@@ -1172,7 +1194,14 @@
           font-size: 12px;
         "
       >
-        <div style="font-weight: bold; margin-bottom: 6px">スポットCSV</div>
+        <div class="control-panel" style="margin-top: 0">
+          <button id="btn-add-spot">スポットを追加</button>
+          <button id="btn-edit-spot">スポットを編集</button>
+        </div>
+
+        <div style="font-weight: bold; margin-top: 10px; margin-bottom: 6px">
+          スポットCSV
+        </div>
         <div class="control-panel" style="margin-top: 0">
           <button id="btn-import-csv" class="btn-dark-gray">
             CSVを読み込む
@@ -1528,7 +1557,7 @@
 
       const STORAGE_KEY = "heijo_multi_routes_v1";
 
-      // --- スポット作成モードの編集状態をリセットする関数 ---
+      // --- 管理モードの編集状態をリセットする関数 ---
       function resetSpotMode() {
         isSpotAddMode = false;
         isSpotEditMode = false;
@@ -1584,13 +1613,17 @@
         if (btnDrawMode) {
           btnDrawMode.disabled = false;
           btnDrawMode.classList.remove("active");
-          btnDrawMode.innerText = "さんぽみちをつくる";
+          btnDrawMode.innerText =
+            manageRouteSelect && manageRouteSelect.value
+              ? "へんしゅうする"
+              : "さんぽみちをつくる";
         }
 
         isDrawMode = false;
 
         if (editStoragePanel) editStoragePanel.style.display = "none";
         if (routeSelect) routeSelect.value = "";
+        if (manageRouteSelect) manageRouteSelect.value = "";
 
         updateStorageButtonsState();
         document.getElementById("status").innerText = "";
@@ -1698,7 +1731,7 @@
           panelOsanpo.classList.add("active");
           navOsanpo.classList.add("active");
 
-          // さんぽモードに切り替えた際におもいで・スポット作成の編集状態をリセットする
+          // さんぽモードに切り替えた際におもいで・管理の編集状態をリセットする
           resetOmoideRoute();
 
           if (userMarker) {
@@ -1730,6 +1763,24 @@
           navOmoide.classList.add("active");
           resetSpotMode();
 
+          if (isDrawMode) {
+            isDrawMode = false;
+            if (isAreaSelectMode) setAreaSelectMode(false);
+            else clearRoutePointSelection();
+            if (editStoragePanel) editStoragePanel.style.display = "none";
+            const btnDrawMode = document.getElementById("btn-draw-mode");
+            if (btnDrawMode) btnDrawMode.classList.remove("active");
+            const selectedName =
+              manageRouteSelect && manageRouteSelect.value
+                ? manageRouteSelect.value
+                : "";
+            if (btnDrawMode) {
+              btnDrawMode.innerText = selectedName
+                ? "へんしゅうする"
+                : "さんぽみちをつくる";
+            }
+          }
+
           if (!isTracking) {
             if (trackingCircleMarker) {
               map.removeLayer(trackingCircleMarker);
@@ -1742,8 +1793,11 @@
         } else if (target === "spot") {
           panelSpot.classList.add("active");
           navSpot.classList.add("active");
-          // スポット作成モードに入ると、さんぽみち編集状態を終了する
-          resetOmoideRoute();
+          resetSpotMode();
+
+          if (routeSelect && manageRouteSelect) {
+            manageRouteSelect.value = routeSelect.value || manageRouteSelect.value || "";
+          }
         }
         sidebar.classList.remove("open");
       }
@@ -2639,9 +2693,14 @@
       }
 
       async function updateRouteSelectOptions() {
-        const select = document.getElementById("route-select");
-        const currentVal = select.value;
-        select.innerHTML = '<option value="">さんぽみちをえらぶ</option>';
+        const selects = [routeSelect, manageRouteSelect].filter(Boolean);
+        const currentValues = new Map(
+          selects.map((select) => [select.id, select.value]),
+        );
+
+        selects.forEach((select) => {
+          select.innerHTML = '<option value="">さんぽみちをえらぶ</option>';
+        });
 
         try {
           if (!db || !auth) {
@@ -2670,16 +2729,33 @@
           });
 
           for (const routeName of routeNames) {
-            const opt = document.createElement("option");
-            opt.value = routeName;
-            opt.textContent = routeName;
-            select.appendChild(opt);
+            selects.forEach((select) => {
+              const opt = document.createElement("option");
+              opt.value = routeName;
+              opt.textContent = routeName;
+              select.appendChild(opt);
+            });
           }
 
-          if (routeNames.includes(currentVal)) {
-            select.value = currentVal;
-          } else {
-            select.value = "";
+          selects.forEach((select) => {
+            const currentVal = currentValues.get(select.id) || "";
+            if (routeNames.includes(currentVal)) {
+              select.value = currentVal;
+            } else {
+              select.value = "";
+            }
+          });
+
+          // 片方だけが選択されていた場合は、もう片方にも反映する。
+          const selectedName =
+            routeSelect && routeSelect.value
+              ? routeSelect.value
+              : manageRouteSelect && manageRouteSelect.value
+                ? manageRouteSelect.value
+                : "";
+          if (selectedName) {
+            if (routeSelect) routeSelect.value = selectedName;
+            if (manageRouteSelect) manageRouteSelect.value = selectedName;
           }
         } catch (e) {
           console.error("Firebaseルート一覧読み込みエラー:", e);
@@ -3143,8 +3219,10 @@
       }
 
       function updateStorageButtonsState() {
-        const select = document.getElementById("route-select");
-        const hasSelectedRoute = Boolean(select.value);
+        const select =
+          document.getElementById("manage-route-select") ||
+          document.getElementById("route-select");
+        const hasSelectedRoute = Boolean(select && select.value);
         const hasEnoughPoints = routePoints.length >= 2;
         const btnOverwrite = document.getElementById("btn-overwrite-route");
         if (btnOverwrite)
@@ -3500,9 +3578,11 @@
             .classList.contains("active");
 
           if (isSpotPanelActive) {
-            if (isSpotAddMode) addSpotAtLocation(clickLat, clickLng);
-          } else if (isDrawMode && isOmoidePanelActive) {
-            addRouteMarker(clickLat, clickLng);
+            if (isDrawMode) {
+              addRouteMarker(clickLat, clickLng);
+            } else if (isSpotAddMode) {
+              addSpotAtLocation(clickLat, clickLng);
+            }
           } else if (isOmoidePanelActive && !isTourRunning) {
             updateLocation(clickLat, clickLng);
           }
@@ -3524,6 +3604,7 @@
       const btnResetRoute = document.getElementById("btn-reset-route");
       const btnStopSpeech = document.getElementById("btn-stop-speech");
       const routeSelect = document.getElementById("route-select");
+      const manageRouteSelect = document.getElementById("manage-route-select");
       const editStoragePanel = document.getElementById("edit-storage-panel");
       const btnAreaSelectRoute = document.getElementById(
         "btn-area-select-route",
@@ -3645,8 +3726,7 @@
         btn.addEventListener("click", () => btn.classList.toggle("active"));
       });
 
-      async function loadSelectedRoute() {
-        const selectedName = routeSelect.value;
+      async function loadSelectedRoute(selectedName = routeSelect.value) {
         if (!selectedName || !db || !auth) return;
 
         try {
@@ -3673,6 +3753,7 @@
           if (pts.length > 0) {
             resetOmoideRoute();
             routeSelect.value = selectedName;
+            if (manageRouteSelect) manageRouteSelect.value = selectedName;
             const btnDrawMode = document.getElementById("btn-draw-mode");
             if (btnDrawMode && !isDrawMode) {
               btnDrawMode.innerText = "へんしゅうする";
@@ -3691,15 +3772,34 @@
       }
 
       routeSelect.addEventListener("change", () => {
-        const hasSelected = Boolean(routeSelect.value);
-        if (!isDrawMode) {
-          btnDrawMode.innerText = hasSelected
-            ? "へんしゅうする"
-            : "さんぽみちをつくる";
-        }
+        const selectedName = routeSelect.value;
+        if (manageRouteSelect) manageRouteSelect.value = selectedName;
         updateStorageButtonsState();
-        if (hasSelected) loadSelectedRoute();
+        if (selectedName) {
+          loadSelectedRoute(selectedName);
+        }
       });
+
+      if (manageRouteSelect) {
+        manageRouteSelect.addEventListener("change", () => {
+          const selectedName = manageRouteSelect.value;
+          if (routeSelect) routeSelect.value = selectedName;
+          updateStorageButtonsState();
+
+          const btnDrawMode = document.getElementById("btn-draw-mode");
+          if (btnDrawMode && !isDrawMode) {
+            btnDrawMode.innerText = selectedName
+              ? "へんしゅうする"
+              : "さんぽみちをつくる";
+          }
+
+          if (selectedName) {
+            loadSelectedRoute(selectedName);
+          } else if (!isDrawMode) {
+            resetOmoideRoute();
+          }
+        });
+      }
 
       if (btnAddSpot) {
         btnAddSpot.addEventListener("click", () => {
@@ -3758,7 +3858,9 @@
         if (isTourRunning) return;
         isDrawMode = !isDrawMode;
         const distInfoElem = document.getElementById("distance-info");
-        const hasSelected = Boolean(routeSelect.value);
+        const hasSelected = Boolean(
+          manageRouteSelect && manageRouteSelect.value,
+        );
 
         let labelText;
         if (isDrawMode) {
@@ -4004,6 +4106,7 @@
                 .then(async () => {
                   await updateRouteSelectOptions();
                   routeSelect.value = routeName;
+                  if (manageRouteSelect) manageRouteSelect.value = routeName;
                   alert(`「${routeName}」をほぞんしました！`);
                   updateStorageButtonsState();
                 })
@@ -4024,7 +4127,7 @@
 
       if (btnOverwriteRoute) {
         btnOverwriteRoute.addEventListener("click", () => {
-          const selectedName = routeSelect.value;
+          const selectedName = manageRouteSelect.value;
           if (!selectedName || routePoints.length < 2) return;
           if (confirm(`「${selectedName}」をうわがきほぞんしますか？`)) {
             // ログイン確認とFirebase保存
@@ -4054,7 +4157,7 @@
 
       if (btnRenameRoute) {
         btnRenameRoute.addEventListener("click", () => {
-          const selectedName = routeSelect.value;
+          const selectedName = manageRouteSelect.value;
           if (!selectedName) return;
           let newName = prompt("あたらしいなまえをいれてね", selectedName);
           if (newName && newName.trim() !== "" && newName !== selectedName) {
@@ -4080,6 +4183,7 @@
                   .then(async () => {
                     await updateRouteSelectOptions();
                     routeSelect.value = newName;
+                    if (manageRouteSelect) manageRouteSelect.value = newName;
                     alert(
                       `「${selectedName}」を「${newName}」にへんこうしました！`,
                     );
@@ -4093,7 +4197,7 @@
 
       if (btnDeleteSavedRoute) {
         btnDeleteSavedRoute.addEventListener("click", () => {
-          const selectedName = routeSelect.value;
+          const selectedName = manageRouteSelect.value;
           if (!selectedName) return;
           if (confirm(`「${selectedName}」をさくじょしますか？`)) {
             // ログイン確認とFirebase削除
